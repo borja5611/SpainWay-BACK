@@ -1,0 +1,265 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+model Usuario {
+  id_usuario     Int                 @id @default(autoincrement())
+  nombre         String              @db.VarChar(100)
+  email          String              @unique @db.VarChar(150)
+  contrasena     String              @map("contraseña") @db.VarChar(255)
+  rol            String              @db.VarChar(50)
+  creado         DateTime
+  actualizado    DateTime
+
+  pref_usuario   Pref_usuario?
+  conversaciones Conversacion[]
+  favoritos      Favoritos[]
+  interacciones  Item_interaccion[]
+  analisis       Analisis_Evento[]
+  itinerarios    Itinerario[]
+
+  @@map("Usuario")
+}
+
+model Pref_usuario {
+  id_usuario_preference Int      @id @default(autoincrement())
+  presupuesto           Int?
+  modo_transporte       String?  @db.VarChar(50)
+  accesibilidad         String?  @db.VarChar(50)
+  con_ninos             Boolean? @map("con_niños")
+  estilo_viaje          String?  @db.VarChar(50)
+  intereses             String?  @db.VarChar(500)
+  id_usuario            Int      @unique
+
+  usuario               Usuario  @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+
+  @@map("Pref_usuario")
+}
+
+model Comunidad {
+  id_CCAA    Int         @id @default(autoincrement())
+  nombre     String      @unique @db.VarChar(50)
+  slug       String      @unique @db.VarChar(80)
+
+  provincias Provincia[]
+
+  @@map("Comunidad")
+}
+
+model Provincia {
+  id_provincia Int         @id @default(autoincrement())
+  nombre       String      @db.VarChar(80)
+  slug         String      @db.VarChar(80)
+  id_CCAA      Int
+
+  comunidad    Comunidad   @relation(fields: [id_CCAA], references: [id_CCAA], onDelete: Cascade)
+  municipios   Municipio[]
+
+  @@unique([id_CCAA, nombre])
+  @@map("Provincia")
+}
+
+model Municipio {
+  id_municipio Int        @id @default(autoincrement())
+  nombre       String     @db.VarChar(300)
+  latitud      Float?
+  longitud     Float?
+  id_provincia Int
+
+  provincia    Provincia  @relation(fields: [id_provincia], references: [id_provincia], onDelete: Cascade)
+  pois         Poi[]
+  eventos      Evento[]
+
+  @@unique([id_provincia, nombre])
+  @@map("Municipio")
+}
+
+model Categoria_poi {
+  id_categoria_poi Int     @id @default(autoincrement())
+  nombre           String  @unique @db.VarChar(50)
+  slug             String  @unique @db.VarChar(80)
+
+  pois             Poi[]
+
+  @@map("Categoria_poi")
+}
+
+model Poi {
+  id_poi           Int                  @id @default(autoincrement())
+  nombre           String               @db.VarChar(400)
+  tipo             String               @db.VarChar(80)
+  subcategoria     String?              @db.VarChar(150)
+  direccion        String?              @db.VarChar(300)
+  latitud          Float?
+  longitud         Float?
+  descripcion      String?              @db.VarChar(1500)
+  temporada        String?              @db.VarChar(80)
+  puntuacion       Float?
+  popularidad      Float?
+  id_cluster       String?              @db.VarChar(50)
+  origen           String?              @db.VarChar(80)
+  valido           Boolean?
+  creado           DateTime?
+  actualizado      DateTime?
+  id_municipio     Int?
+  id_categoria_poi Int
+  id_global        String               @unique @db.VarChar(150)
+
+  municipio        Municipio?           @relation(fields: [id_municipio], references: [id_municipio], onDelete: SetNull)
+  categoria_poi    Categoria_poi        @relation(fields: [id_categoria_poi], references: [id_categoria_poi], onDelete: Cascade)
+  programaciones   Programacion_poi[]
+  favoritos        Favoritos[]
+  interacciones    Item_interaccion[]
+  elementos        Elemento_Itinerario[]
+
+  @@map("Poi")
+}
+
+model Programacion_poi {
+  id_programacion Int      @id @default(autoincrement()) @map("id_programación")
+  dia_semana      Int
+  inicio          String?  @db.VarChar(10)
+  fin             String?  @db.VarChar(10)
+  cerrado         Boolean?
+  id_poi          Int
+
+  poi             Poi      @relation(fields: [id_poi], references: [id_poi], onDelete: Cascade)
+
+  @@map("Programación_poi")
+}
+
+model Evento {
+  id_evento    Int        @id @default(autoincrement())
+  nombre       String     @db.VarChar(150)
+  descripcion  String?    @db.VarChar(1000)
+  inicio       DateTime?
+  fin          DateTime?
+  latitud      Decimal?   @db.Decimal(10, 7)
+  longitud     Decimal?   @db.Decimal(10, 7)
+  id_municipio Int
+  origen       String?    @db.VarChar(100)
+
+  municipio    Municipio  @relation(fields: [id_municipio], references: [id_municipio], onDelete: Cascade)
+
+  @@map("Evento")
+}
+
+model Favoritos {
+  id_favoritos Int      @id @default(autoincrement())
+  creado       DateTime?
+  id_usuario   Int
+  id_poi       Int
+
+  usuario      Usuario  @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+  poi          Poi      @relation(fields: [id_poi], references: [id_poi], onDelete: Cascade)
+
+  @@unique([id_usuario, id_poi])
+  @@map("Favoritos")
+}
+
+model Item_interaccion {
+  id_interaccion Int      @id @default(autoincrement())
+  metadata       String?  @db.VarChar(1000)
+  creado         DateTime?
+  tipo_accion    String?  @db.VarChar(100)
+  id_usuario     Int
+  id_poi         Int
+
+  usuario        Usuario  @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+  poi            Poi      @relation(fields: [id_poi], references: [id_poi], onDelete: Cascade)
+
+  @@map("Item_interaccion")
+}
+
+model Analisis_Evento {
+  id_analisis_evento Int      @id @default(autoincrement())
+  nombre_evento      String?  @db.VarChar(100)
+  tipo_entidad       String?  @db.VarChar(100)
+  id_entidad         Int?
+  metadata           String?  @db.VarChar(1000)
+  creado             DateTime?
+  id_usuario         Int
+
+  usuario            Usuario  @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+
+  @@map("Analisis_Evento")
+}
+
+model Conversacion {
+  id_conversacion Int       @id @default(autoincrement())
+  titulo          String?   @db.VarChar(200)
+  creado          DateTime?
+  id_usuario      Int
+
+  usuario         Usuario   @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+  mensajes        Mensaje[]
+
+  @@map("Conversacion")
+}
+
+model Mensaje {
+  id_mensaje       Int           @id @default(autoincrement())
+  rol              String?       @db.VarChar(50)
+  contenido        String?       @db.VarChar(2000)
+  creado           DateTime?
+  id_conversacion  Int
+
+  conversacion     Conversacion  @relation(fields: [id_conversacion], references: [id_conversacion], onDelete: Cascade)
+
+  @@map("Mensaje")
+}
+
+model Itinerario {
+  id_itinerario  Int               @id @default(autoincrement())
+  titulo         String?           @db.VarChar(200)
+  destino        String?           @db.VarChar(150)
+  inicio         DateTime?
+  fin            DateTime?
+  presupuesto    Int?
+  transporte     String?           @db.VarChar(50)
+  accesibilidad  String?           @db.VarChar(50)
+  estado         String?           @db.VarChar(50)
+  creado         DateTime?
+  actualizado    DateTime?
+  id_usuario     Int
+
+  usuario        Usuario           @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+  dias           Dia_Itinerario[]
+
+  @@map("Itinerario")
+}
+
+model Dia_Itinerario {
+  id_dia_itinerario Int                    @id @default(autoincrement())
+  fecha             DateTime?
+  minutos           Int?
+  notas             String?                @db.VarChar(1000)
+  id_itinerario     Int
+
+  itinerario        Itinerario             @relation(fields: [id_itinerario], references: [id_itinerario], onDelete: Cascade)
+  elementos         Elemento_Itinerario[]
+
+  @@map("Dia_Itinerario")
+}
+
+model Elemento_Itinerario {
+  id_elemento_itinerario Int             @id @default(autoincrement())
+  inicio                 DateTime?
+  fin                    DateTime?
+  orden                  Int?
+  transporte             String?         @db.VarChar(50)
+  tiempo_transporte      Int?
+  id_dia_itinerario      Int
+  id_poi                 Int
+
+  dia_itinerario         Dia_Itinerario  @relation(fields: [id_dia_itinerario], references: [id_dia_itinerario], onDelete: Cascade)
+  poi                    Poi             @relation(fields: [id_poi], references: [id_poi], onDelete: Cascade)
+
+  @@map("Elemento_Itinerario")
+}

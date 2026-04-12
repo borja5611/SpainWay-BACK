@@ -1,0 +1,102 @@
+2.1. Módulo Auth
+Endpoints
+POST /auth/register
+POST /auth/login
+POST /auth/logout
+GET /auth/me
+POST /auth/refresh
+Para qué sirven
+registro
+login
+cierre de sesión
+recuperar usuario autenticado
+renovar token
+2.2. Módulo Usuario
+Endpoints
+GET /usuarios/:id
+PATCH /usuarios/:id
+DELETE /usuarios/:id
+2.3. Módulo Preferencias
+Endpoints
+GET /preferencias/:id_usuario
+POST /preferencias
+PATCH /preferencias/:id_usuario
+2.4. Módulo Territorio
+Endpoints
+GET /comunidades
+GET /comunidades/:id
+GET /provincias
+GET /provincias/:id
+GET /provincias/comunidad/:id_CCAA
+GET /municipios
+GET /municipios/:id
+GET /municipios/provincia/:id_provincia
+2.5. Módulo Categorías
+Endpoints
+GET /categorias-poi
+GET /categorias-poi/:id
+2.6. Módulo POIs
+Endpoints
+GET /pois
+GET /pois/:id
+GET /pois/id-global/:id_global
+GET /pois/municipio/:id_municipio
+GET /pois/categoria/:id_categoria_poi
+GET /pois/busqueda
+GET /pois/explorar
+GET /pois/cercanos
+GET /pois/destacados
+GET /pois/filtros
+2.7. Módulo Favoritos
+Endpoints
+GET /favoritos/:id_usuario
+POST /favoritos
+DELETE /favoritos/:id_usuario/:id_poi
+2.8. Módulo Itinerarios
+Endpoints
+GET /itinerarios/:id_usuario
+GET /itinerarios/detalle/:id_itinerario
+POST /itinerarios
+PATCH /itinerarios/:id_itinerario
+DELETE /itinerarios/:id_itinerario
+2.9. Módulo Días de itinerario
+Endpoints
+GET /dias-itinerario/:id_itinerario
+POST /dias-itinerario
+PATCH /dias-itinerario/:id_dia_itinerario
+DELETE /dias-itinerario/:id_dia_itinerario
+2.10. Módulo Elementos de itinerario
+Endpoints
+GET /elementos-itinerario/:id_dia_itinerario
+POST /elementos-itinerario
+PATCH /elementos-itinerario/:id_elemento_itinerario
+DELETE /elementos-itinerario/:id_elemento_itinerario
+2.11. Módulo Conversación
+Endpoints
+GET /conversaciones/:id_usuario
+GET /conversaciones/detalle/:id_conversacion
+POST /conversaciones
+DELETE /conversaciones/:id_conversacion
+2.12. Módulo Mensajes
+Endpoints
+GET /mensajes/:id_conversacion
+POST /mensajes
+2.13. Módulo Interacciones
+Endpoints
+POST /interacciones
+GET /interacciones/:id_usuario
+2.14. Módulo Analítica
+Endpoints
+POST /analitica/evento
+GET /analitica/:id_usuario
+2.15. Módulo Eventos
+Endpoints
+GET /eventos
+GET /eventos/:id
+GET /eventos/municipio/:id_municipio
+2.16. Módulo Programación de POIs
+Endpoints
+GET /programacion-poi/:id_poi
+POST /programacion-poi
+PATCH /programacion-poi/:id_programacion
+DELETE /programacion-poi/:id_programacion

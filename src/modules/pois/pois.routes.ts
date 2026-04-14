@@ -1,230 +1,322 @@
-// src/modules/pois/pois.routes.ts
 import { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
 
+function toInt(value: unknown): number | null {
+  const num = Number(value);
+  return Number.isInteger(num) ? num : null;
+}
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const R = 6371;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) ** 2;
+
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 export default async function poisRoutes(app: FastifyInstance) {
-  app.get("/", {
-    schema: {
-      tags: ["Pois"],
-      summary: "Listar POIs con paginación y filtros básicos",
-      querystring: {
-        type: "object",
-        properties: {
-          page: { type: "integer", minimum: 1, default: 1 },
-          limit: { type: "integer", minimum: 1, maximum: 200, default: 20 },
-          q: { type: "string" },
-          id_categoria_poi: { type: "integer" },
-          id_municipio: { type: "integer" },
-        },
+  app.get("/id-global/:id_global", async (request, reply) => {
+    const { id_global } = request.params as { id_global: string };
+
+    const poi = await prisma.poi.findUnique({
+      where: { id_global },
+      include: {
+        municipio: true,
+        categoria_poi: true,
       },
-    },
-    handler: async (request) => {
-      const {
-        page = 1,
-        limit = 20,
-        q,
-        id_categoria_poi,
-        id_municipio,
-      } = request.query as {
-        page?: number;
-        limit?: number;
-        q?: string;
-        id_categoria_poi?: number;
-        id_municipio?: number;
-      };
+    });
 
-      const skip = (page - 1) * limit;
+    if (!poi) {
+      return reply.code(404).send({ message: "POI no encontrado" });
+    }
 
-      const where = {
-        ...(q
-          ? {
-              OR: [
-                { nombre: { contains: q, mode: "insensitive" as const } },
-                { descripcion: { contains: q, mode: "insensitive" as const } },
-                { direccion: { contains: q, mode: "insensitive" as const } },
-              ],
-            }
-          : {}),
-        ...(id_categoria_poi ? { id_categoria_poi } : {}),
-        ...(id_municipio ? { id_municipio } : {}),
-      };
+    return poi;
+  });
 
-      const [data, total] = await Promise.all([
-        prisma.poi.findMany({
-          where,
-          include: {
-            municipio: true,
-            categoria_poi: true,
+  app.get("/municipio/:id_municipio", async (request, reply) => {
+    const params = request.params as { id_municipio: string };
+    const id_municipio = toInt(params.id_municipio);
+
+    if (id_municipio === null) {
+      return reply.code(400).send({ message: "id_municipio inválido" });
+    }
+
+    const pois = await prisma.poi.findMany({
+      where: { id_municipio },
+      include: {
+        municipio: true,
+        categoria_poi: true,
+      },
+      orderBy: { nombre: "asc" },
+    });
+
+    return pois;
+  });
+
+  app.get("/categoria/:id_categoria_poi", async (request, reply) => {
+    const params = request.params as { id_categoria_poi: string };
+    const id_categoria_poi = toInt(params.id_categoria_poi);
+
+    if (id_categoria_poi === null) {
+      return reply.code(400).send({ message: "id_categoria_poi inválido" });
+    }
+
+    const pois = await prisma.poi.findMany({
+      where: { id_categoria_poi },
+      include: {
+        municipio: true,
+        categoria_poi: true,
+      },
+      orderBy: { nombre: "asc" },
+    });
+
+    return pois;
+  });
+
+  app.get("/busqueda/texto", async (request) => {
+    const { q } = request.query as { q?: string };
+
+    if (!q || !q.trim()) {
+      return [];
+    }
+
+    const pois = await prisma.poi.findMany({
+      where: {
+        OR: [
+          { nombre: { contains: q, mode: "insensitive" } },
+          { descripcion: { contains: q, mode: "insensitive" } },
+          { direccion: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      include: {
+        municipio: true,
+        categoria_poi: true,
+      },
+      take: 50,
+      orderBy: { nombre: "asc" },
+    });
+
+    return pois;
+  });
+
+  app.get("/explorar", async (request) => {
+    const query = request.query as Record<string, string | undefined>;
+
+    const page = Math.max(1, Number(query.page ?? 1));
+    const limit = Math.min(200, Math.max(1, Number(query.limit ?? 20)));
+    const skip = (page - 1) * limit;
+
+    const q = query.q?.trim();
+    const id_CCAA = toInt(query.id_CCAA);
+    const id_provincia = toInt(query.id_provincia);
+    const id_municipio = toInt(query.id_municipio);
+    const id_categoria_poi = toInt(query.id_categoria_poi);
+    const tipo = query.tipo?.trim();
+
+    const where = {
+      ...(q
+        ? {
+            OR: [
+              { nombre: { contains: q, mode: "insensitive" as const } },
+              { descripcion: { contains: q, mode: "insensitive" as const } },
+              { direccion: { contains: q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+      ...(id_categoria_poi !== null ? { id_categoria_poi } : {}),
+      ...(id_municipio !== null ? { id_municipio } : {}),
+      ...(tipo ? { tipo: { contains: tipo, mode: "insensitive" as const } } : {}),
+      ...(id_provincia !== null
+        ? {
+            municipio: {
+              id_provincia,
+            },
+          }
+        : {}),
+      ...(id_CCAA !== null
+        ? {
+            municipio: {
+              provincia: {
+                id_CCAA,
+              },
+            },
+          }
+        : {}),
+    };
+
+    const [data, total] = await Promise.all([
+      prisma.poi.findMany({
+        where,
+        include: {
+          municipio: {
+            include: {
+              provincia: true,
+            },
           },
-          orderBy: { nombre: "asc" },
-          skip,
-          take: limit,
-        }),
-        prisma.poi.count({ where }),
-      ]);
-
-      return {
-        page,
-        limit,
-        total,
-        data,
-      };
-    },
-  });
-
-  app.get("/:id", {
-    schema: {
-      tags: ["Pois"],
-      summary: "Obtener detalle de un POI",
-      params: {
-        type: "object",
-        required: ["id"],
-        properties: {
-          id: { type: "integer" },
-        },
-      },
-    },
-    handler: async (request, reply) => {
-      const { id } = request.params as { id: number };
-
-      const poi = await prisma.poi.findUnique({
-        where: { id_poi: id },
-        include: {
-          municipio: true,
           categoria_poi: true,
         },
-      });
+        orderBy: { nombre: "asc" },
+        skip,
+        take: limit,
+      }),
+      prisma.poi.count({ where }),
+    ]);
 
-      if (!poi) {
-        return reply.code(404).send({
-          message: "POI no encontrado",
-        });
-      }
-
-      return poi;
-    },
+    return {
+      page,
+      limit,
+      total,
+      data,
+    };
   });
 
-  app.get("/id-global/:id_global", {
-    schema: {
-      tags: ["Pois"],
-      summary: "Obtener detalle de un POI por id_global",
-      params: {
-        type: "object",
-        required: ["id_global"],
-        properties: {
-          id_global: { type: "string" },
+  app.get("/cercanos", async (request, reply) => {
+    const query = request.query as Record<string, string | undefined>;
+
+    const lat = Number(query.lat);
+    const lon = Number(query.lon);
+    const radioKm = Number(query.radioKm ?? 10);
+    const limit = Number(query.limit ?? 20);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return reply.code(400).send({ message: "lat y lon son obligatorios y deben ser numéricos" });
+    }
+
+    const latDelta = radioKm / 111;
+    const lonDelta = radioKm / (111 * Math.cos((lat * Math.PI) / 180));
+
+    const candidatos = await prisma.poi.findMany({
+      where: {
+        latitud: {
+          gte: lat - latDelta,
+          lte: lat + latDelta,
+        },
+        longitud: {
+          gte: lon - lonDelta,
+          lte: lon + lonDelta,
         },
       },
-    },
-    handler: async (request, reply) => {
-      const { id_global } = request.params as { id_global: string };
+      include: {
+        municipio: true,
+        categoria_poi: true,
+      },
+    });
 
-      const poi = await prisma.poi.findUnique({
-        where: { id_global },
-        include: {
-          municipio: true,
-          categoria_poi: true,
-        },
-      });
+    const cercanos = candidatos
+      .filter((poi) => poi.latitud !== null && poi.longitud !== null)
+      .map((poi) => {
+        const distanciaKm = haversineKm(lat, lon, poi.latitud!, poi.longitud!);
+        return { ...poi, distanciaKm };
+      })
+      .filter((poi) => poi.distanciaKm <= radioKm)
+      .sort((a, b) => a.distanciaKm - b.distanciaKm)
+      .slice(0, limit);
 
-      if (!poi) {
-        return reply.code(404).send({
-          message: "POI no encontrado",
-        });
-      }
-
-      return poi;
-    },
+    return cercanos;
   });
 
-  app.get("/municipio/:id_municipio", {
-    schema: {
-      tags: ["Pois"],
-      summary: "Listar POIs de un municipio",
-      params: {
-        type: "object",
-        required: ["id_municipio"],
-        properties: {
-          id_municipio: { type: "integer" },
-        },
-      },
-    },
-    handler: async (request) => {
-      const { id_municipio } = request.params as { id_municipio: number };
+  app.get("/destacados", async (request) => {
+    const query = request.query as Record<string, string | undefined>;
 
-      const pois = await prisma.poi.findMany({
-        where: { id_municipio },
+    const limit = Math.min(100, Math.max(1, Number(query.limit ?? 20)));
+    const id_categoria_poi = toInt(query.id_categoria_poi);
+    const id_municipio = toInt(query.id_municipio);
+
+    const pois = await prisma.poi.findMany({
+      where: {
+        ...(id_categoria_poi !== null ? { id_categoria_poi } : {}),
+        ...(id_municipio !== null ? { id_municipio } : {}),
+      },
+      include: {
+        municipio: true,
+        categoria_poi: true,
+      },
+      orderBy: [
+        { popularidad: "desc" },
+        { puntuacion: "desc" },
+        { nombre: "asc" },
+      ],
+      take: limit,
+    });
+
+    return pois;
+  });
+
+  app.get("/", async (request) => {
+    const query = request.query as Record<string, string | undefined>;
+
+    const page = Math.max(1, Number(query.page ?? 1));
+    const limit = Math.min(200, Math.max(1, Number(query.limit ?? 20)));
+    const skip = (page - 1) * limit;
+
+    const q = query.q?.trim();
+    const id_categoria_poi = toInt(query.id_categoria_poi);
+    const id_municipio = toInt(query.id_municipio);
+
+    const where = {
+      ...(q
+        ? {
+            OR: [
+              { nombre: { contains: q, mode: "insensitive" as const } },
+              { descripcion: { contains: q, mode: "insensitive" as const } },
+              { direccion: { contains: q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+      ...(id_categoria_poi !== null ? { id_categoria_poi } : {}),
+      ...(id_municipio !== null ? { id_municipio } : {}),
+    };
+
+    const [data, total] = await Promise.all([
+      prisma.poi.findMany({
+        where,
         include: {
           municipio: true,
           categoria_poi: true,
         },
         orderBy: { nombre: "asc" },
-      });
+        skip,
+        take: limit,
+      }),
+      prisma.poi.count({ where }),
+    ]);
 
-      return pois;
-    },
+    return {
+      page,
+      limit,
+      total,
+      data,
+    };
   });
 
-  app.get("/categoria/:id_categoria_poi", {
-    schema: {
-      tags: ["Pois"],
-      summary: "Listar POIs por categoría",
-      params: {
-        type: "object",
-        required: ["id_categoria_poi"],
-        properties: {
-          id_categoria_poi: { type: "integer" },
-        },
+  app.get("/:id", async (request, reply) => {
+    const params = request.params as { id: string };
+    const id = toInt(params.id);
+
+    if (id === null) {
+      return reply.code(400).send({ message: "id inválido" });
+    }
+
+    const poi = await prisma.poi.findUnique({
+      where: { id_poi: id },
+      include: {
+        municipio: true,
+        categoria_poi: true,
       },
-    },
-    handler: async (request) => {
-      const { id_categoria_poi } = request.params as { id_categoria_poi: number };
+    });
 
-      const pois = await prisma.poi.findMany({
-        where: { id_categoria_poi },
-        include: {
-          municipio: true,
-          categoria_poi: true,
-        },
-        orderBy: { nombre: "asc" },
-      });
+    if (!poi) {
+      return reply.code(404).send({ message: "POI no encontrado" });
+    }
 
-      return pois;
-    },
-  });
-
-  app.get("/busqueda/texto", {
-    schema: {
-      tags: ["Pois"],
-      summary: "Buscar POIs por texto",
-      querystring: {
-        type: "object",
-        required: ["q"],
-        properties: {
-          q: { type: "string" },
-        },
-      },
-    },
-    handler: async (request) => {
-      const { q } = request.query as { q: string };
-
-      const pois = await prisma.poi.findMany({
-        where: {
-          OR: [
-            { nombre: { contains: q, mode: "insensitive" } },
-            { descripcion: { contains: q, mode: "insensitive" } },
-            { direccion: { contains: q, mode: "insensitive" } },
-          ],
-        },
-        include: {
-          municipio: true,
-          categoria_poi: true,
-        },
-        take: 50,
-      });
-
-      return pois;
-    },
+    return poi;
   });
 }

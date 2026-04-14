@@ -5,6 +5,84 @@ import { parse } from "csv-parse/sync";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
+
+const PROVINCIA_TO_CCAA: Record<string, string> = {
+  "a coruna": "Galicia",
+  "alava": "Pais Vasco",
+  "albacete": "Castilla-La Mancha",
+  "alicante": "Comunidad Valenciana",
+  "almeria": "Andalucia",
+  "asturias": "Asturias",
+  "avila": "Castilla y Leon",
+  "badajoz": "Extremadura",
+  "barcelona": "Catalunya",
+  "burgos": "Castilla y Leon",
+  "caceres": "Extremadura",
+  "cadiz": "Andalucia",
+  "cantabria": "Cantabria",
+  "castellon": "Comunidad Valenciana",
+  "ceuta": "Ceuta",
+  "ciudad real": "Castilla-La Mancha",
+  "cordoba": "Andalucia",
+  "cuenca": "Castilla-La Mancha",
+  "girona": "Catalunya",
+  "granada": "Andalucia",
+  "guadalajara": "Castilla-La Mancha",
+  "guipuzcoa": "Pais Vasco",
+  "huelva": "Andalucia",
+  "huesca": "Aragon",
+  "illes balears": "Illes Balears",
+  "jaen": "Andalucia",
+  "la rioja": "La Rioja",
+  "las palmas": "Canarias",
+  "leon": "Castilla y Leon",
+  "lleida": "Catalunya",
+  "lugo": "Galicia",
+  "madrid": "Comunidad de Madrid",
+  "malaga": "Andalucia",
+  "melilla": "Melilla",
+  "murcia": "Region de Murcia",
+  "navarra": "Navarra",
+  "ourense": "Galicia",
+  "palencia": "Castilla y Leon",
+  "pontevedra": "Galicia",
+  "salamanca": "Castilla y Leon",
+  "santa cruz de tenerife": "Canarias",
+  "segovia": "Castilla y Leon",
+  "sevilla": "Andalucia",
+  "soria": "Castilla y Leon",
+  "tarragona": "Catalunya",
+  "teruel": "Aragon",
+  "toledo": "Castilla-La Mancha",
+  "valencia": "Comunidad Valenciana",
+  "valladolid": "Castilla y Leon",
+  "vizcaya": "Pais Vasco",
+  "zamora": "Castilla y Leon",
+  "zaragoza": "Aragon",
+};
+
+function normalizarClaveTerritorio(valor: string | null): string | null {
+  const texto = limpiarTexto(valor);
+  if (!texto) return null;
+
+  return texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function resolverCcaa(ccaaOriginal: string | null, provincia: string | null): string | null {
+  const provinciaKey = normalizarClaveTerritorio(provincia);
+
+  if (provinciaKey && PROVINCIA_TO_CCAA[provinciaKey]) {
+    return PROVINCIA_TO_CCAA[provinciaKey];
+  }
+
+  return limpiarTexto(ccaaOriginal);
+}
+
 type CsvRow = {
   GLOBAL_ID: string;
   NAME: string;
@@ -102,27 +180,31 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 }
 
 async function borrarDatosPrevios() {
-  console.log("🧹 Borrando datos previos...");
+  console.log("🧹 Borrando datos previos y reseteando ids...");
 
-  await prisma.mensaje.deleteMany();
-  await prisma.conversacion.deleteMany();
-  await prisma.analisis_Evento.deleteMany();
-  await prisma.item_interaccion.deleteMany();
-  await prisma.favoritos.deleteMany();
-  await prisma.elemento_Itinerario.deleteMany();
-  await prisma.dia_Itinerario.deleteMany();
-  await prisma.itinerario.deleteMany();
-  await prisma.programacion_poi.deleteMany();
-  await prisma.evento.deleteMany();
-  await prisma.poi.deleteMany();
-  await prisma.categoria_poi.deleteMany();
-  await prisma.municipio.deleteMany();
-  await prisma.provincia.deleteMany();
-  await prisma.comunidad.deleteMany();
-  await prisma.pref_usuario.deleteMany();
-  await prisma.usuario.deleteMany();
+  await prisma.$executeRawUnsafe(`
+    TRUNCATE TABLE
+      "Mensaje",
+      "Conversacion",
+      "Analisis_Evento",
+      "Item_interaccion",
+      "Favoritos",
+      "Elemento_Itinerario",
+      "Dia_Itinerario",
+      "Itinerario",
+      "Programación_poi",
+      "Evento",
+      "Poi",
+      "Categoria_poi",
+      "Municipio",
+      "Provincia",
+      "Comunidad",
+      "Pref_usuario",
+      "Usuario"
+    RESTART IDENTITY CASCADE;
+  `);
 
-  console.log("✅ Datos previos borrados");
+  console.log("✅ Datos previos borrados e ids reiniciados");
 }
 
 async function main() {

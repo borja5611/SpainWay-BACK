@@ -135,4 +135,32 @@ export default async function favoritosRoutes(app: FastifyInstance) {
       };
     },
   });
+
+    app.get("/check/:id_usuario/:id_poi", async (request, reply) => {
+    const { id_usuario, id_poi } = request.params as {
+      id_usuario: string;
+      id_poi: string;
+    };
+
+    const usuarioId = Number(id_usuario);
+    const poiId = Number(id_poi);
+
+    if (!Number.isInteger(usuarioId) || !Number.isInteger(poiId)) {
+      return reply.code(400).send({
+        message: "id_usuario o id_poi inválidos",
+      });
+    }
+
+    const favorito = await prisma.favoritos.findFirst({
+      where: {
+        id_usuario: usuarioId,
+        id_poi: poiId,
+      },
+    });
+
+    return {
+      exists: !!favorito,
+      favorito: favorito ?? null,
+    };
+  });
 }

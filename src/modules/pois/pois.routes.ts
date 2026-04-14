@@ -319,4 +319,32 @@ export default async function poisRoutes(app: FastifyInstance) {
 
     return poi;
   });
+
+    app.get("/filtros", async () => {
+    const [comunidades, provincias, categorias, tipos] = await Promise.all([
+      prisma.comunidad.findMany({
+        orderBy: { nombre: "asc" },
+      }),
+      prisma.provincia.findMany({
+        orderBy: { nombre: "asc" },
+      }),
+      prisma.categoria_poi.findMany({
+        orderBy: { nombre: "asc" },
+      }),
+      prisma.poi.findMany({
+        distinct: ["tipo"],
+        select: { tipo: true },
+        orderBy: { tipo: "asc" },
+      }),
+    ]);
+
+    return {
+      comunidades,
+      provincias,
+      categorias,
+      tipos: tipos
+        .map((t) => t.tipo)
+        .filter((t) => t !== null && t !== ""),
+    };
+  });
 }

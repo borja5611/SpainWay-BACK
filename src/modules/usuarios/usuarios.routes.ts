@@ -104,4 +104,59 @@ export default async function usuariosRoutes(app: FastifyInstance) {
       message: "Usuario eliminado correctamente",
     };
   });
+
+     app.get("/:id/resumen", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const usuarioId = Number(id);
+
+    if (!Number.isInteger(usuarioId)) {
+      return reply.code(400).send({
+        message: "id inválido",
+      });
+    }
+
+    const usuario = await prisma.usuario.findUnique({
+      where: { id_usuario: usuarioId },
+      select: {
+        id_usuario: true,
+        nombre: true,
+        email: true,
+        rol: true,
+        creado: true,
+        actualizado: true,
+      },
+    });
+
+    if (!usuario) {
+      return reply.code(404).send({
+        message: "Usuario no encontrado",
+      });
+    }
+
+    const [preferencias, totalFavoritos, totalItinerarios, totalConversaciones] =
+      await Promise.all([
+        prisma.pref_usuario.findUnique({
+          where: { id_usuario: usuarioId },
+        }),
+        prisma.favoritos.count({
+          where: { id_usuario: usuarioId },
+        }),
+        prisma.itinerario.count({
+          where: { id_usuario: usuarioId },
+        }),
+        prisma.conversacion.count({
+          where: { id_usuario: usuarioId },
+        }),
+      ]);
+
+    return {
+      usuario,
+      preferencias,
+      resumen: {
+        totalFavoritos,
+        totalItinerarios,
+        totalConversaciones,
+      },
+    };
+  });
 }

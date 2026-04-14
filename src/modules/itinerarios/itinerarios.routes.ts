@@ -38,4 +38,35 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
       return itinerarios;
     },
   });
+
+    app.get("/resumen/:id_usuario", async (request, reply) => {
+    const { id_usuario } = request.params as { id_usuario: string };
+    const usuarioId = Number(id_usuario);
+
+    if (!Number.isInteger(usuarioId)) {
+      return reply.code(400).send({
+        message: "id_usuario inválido",
+      });
+    }
+
+    const itinerarios = await prisma.itinerario.findMany({
+      where: { id_usuario: usuarioId },
+      select: {
+        id_itinerario: true,
+        titulo: true,
+        destino: true,
+        inicio: true,
+        fin: true,
+        presupuesto: true,
+        transporte: true,
+        accesibilidad: true,
+        estado: true,
+        creado: true,
+        actualizado: true,
+      },
+      orderBy: { creado: "desc" },
+    });
+
+    return itinerarios;
+  });
 }

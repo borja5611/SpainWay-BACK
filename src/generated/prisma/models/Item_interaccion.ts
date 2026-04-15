@@ -8,7 +8,7 @@
  *
  * 🟢 You can import this file directly.
  */
-import type * as runtime from "@prisma/client/runtime/client"
+import type * as runtime from "@prisma/client/runtime/library"
 import type * as $Enums from "../enums.js"
 import type * as Prisma from "../internal/prismaNamespace.js"
 
@@ -207,7 +207,7 @@ export type Item_interaccionGroupByOutputType = {
   _max: Item_interaccionMaxAggregateOutputType | null
 }
 
-export type GetItem_interaccionGroupByPayload<T extends Item_interaccionGroupByArgs> = Prisma.PrismaPromise<
+type GetItem_interaccionGroupByPayload<T extends Item_interaccionGroupByArgs> = Prisma.PrismaPromise<
   Array<
     Prisma.PickEnumerable<Item_interaccionGroupByOutputType, T['by']> &
       {
@@ -1332,11 +1332,6 @@ export type Item_interaccionFindManyArgs<ExtArgs extends runtime.Types.Extension
    * Skip the first `n` Item_interaccions.
    */
   skip?: number
-  /**
-   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-   * 
-   * Filter by unique combinations of Item_interaccions.
-   */
   distinct?: Prisma.Item_interaccionScalarFieldEnum | Prisma.Item_interaccionScalarFieldEnum[]
 }
 

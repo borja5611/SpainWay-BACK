@@ -8,7 +8,7 @@
  *
  * 🟢 You can import this file directly.
  */
-import type * as runtime from "@prisma/client/runtime/client"
+import type * as runtime from "@prisma/client/runtime/library"
 import type * as $Enums from "../enums.js"
 import type * as Prisma from "../internal/prismaNamespace.js"
 
@@ -229,7 +229,7 @@ export type Elemento_ItinerarioGroupByOutputType = {
   _max: Elemento_ItinerarioMaxAggregateOutputType | null
 }
 
-export type GetElemento_ItinerarioGroupByPayload<T extends Elemento_ItinerarioGroupByArgs> = Prisma.PrismaPromise<
+type GetElemento_ItinerarioGroupByPayload<T extends Elemento_ItinerarioGroupByArgs> = Prisma.PrismaPromise<
   Array<
     Prisma.PickEnumerable<Elemento_ItinerarioGroupByOutputType, T['by']> &
       {
@@ -1426,11 +1426,6 @@ export type Elemento_ItinerarioFindManyArgs<ExtArgs extends runtime.Types.Extens
    * Skip the first `n` Elemento_Itinerarios.
    */
   skip?: number
-  /**
-   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-   * 
-   * Filter by unique combinations of Elemento_Itinerarios.
-   */
   distinct?: Prisma.Elemento_ItinerarioScalarFieldEnum | Prisma.Elemento_ItinerarioScalarFieldEnum[]
 }
 

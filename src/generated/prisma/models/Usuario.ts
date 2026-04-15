@@ -8,7 +8,7 @@
  *
  * 🟢 You can import this file directly.
  */
-import type * as runtime from "@prisma/client/runtime/client"
+import type * as runtime from "@prisma/client/runtime/library"
 import type * as $Enums from "../enums.js"
 import type * as Prisma from "../internal/prismaNamespace.js"
 
@@ -37,8 +37,10 @@ export type UsuarioSumAggregateOutputType = {
 export type UsuarioMinAggregateOutputType = {
   id_usuario: number | null
   nombre: string | null
+  nombre_usuario: string | null
   email: string | null
   contrasena: string | null
+  telefono: string | null
   rol: string | null
   creado: Date | null
   actualizado: Date | null
@@ -47,8 +49,10 @@ export type UsuarioMinAggregateOutputType = {
 export type UsuarioMaxAggregateOutputType = {
   id_usuario: number | null
   nombre: string | null
+  nombre_usuario: string | null
   email: string | null
   contrasena: string | null
+  telefono: string | null
   rol: string | null
   creado: Date | null
   actualizado: Date | null
@@ -57,8 +61,10 @@ export type UsuarioMaxAggregateOutputType = {
 export type UsuarioCountAggregateOutputType = {
   id_usuario: number
   nombre: number
+  nombre_usuario: number
   email: number
   contrasena: number
+  telefono: number
   rol: number
   creado: number
   actualizado: number
@@ -77,8 +83,10 @@ export type UsuarioSumAggregateInputType = {
 export type UsuarioMinAggregateInputType = {
   id_usuario?: true
   nombre?: true
+  nombre_usuario?: true
   email?: true
   contrasena?: true
+  telefono?: true
   rol?: true
   creado?: true
   actualizado?: true
@@ -87,8 +95,10 @@ export type UsuarioMinAggregateInputType = {
 export type UsuarioMaxAggregateInputType = {
   id_usuario?: true
   nombre?: true
+  nombre_usuario?: true
   email?: true
   contrasena?: true
+  telefono?: true
   rol?: true
   creado?: true
   actualizado?: true
@@ -97,8 +107,10 @@ export type UsuarioMaxAggregateInputType = {
 export type UsuarioCountAggregateInputType = {
   id_usuario?: true
   nombre?: true
+  nombre_usuario?: true
   email?: true
   contrasena?: true
+  telefono?: true
   rol?: true
   creado?: true
   actualizado?: true
@@ -194,11 +206,13 @@ export type UsuarioGroupByArgs<ExtArgs extends runtime.Types.Extensions.Internal
 export type UsuarioGroupByOutputType = {
   id_usuario: number
   nombre: string
+  nombre_usuario: string | null
   email: string
   contrasena: string
+  telefono: string | null
   rol: string
-  creado: Date
-  actualizado: Date
+  creado: Date | null
+  actualizado: Date | null
   _count: UsuarioCountAggregateOutputType | null
   _avg: UsuarioAvgAggregateOutputType | null
   _sum: UsuarioSumAggregateOutputType | null
@@ -206,7 +220,7 @@ export type UsuarioGroupByOutputType = {
   _max: UsuarioMaxAggregateOutputType | null
 }
 
-export type GetUsuarioGroupByPayload<T extends UsuarioGroupByArgs> = Prisma.PrismaPromise<
+type GetUsuarioGroupByPayload<T extends UsuarioGroupByArgs> = Prisma.PrismaPromise<
   Array<
     Prisma.PickEnumerable<UsuarioGroupByOutputType, T['by']> &
       {
@@ -227,62 +241,70 @@ export type UsuarioWhereInput = {
   NOT?: Prisma.UsuarioWhereInput | Prisma.UsuarioWhereInput[]
   id_usuario?: Prisma.IntFilter<"Usuario"> | number
   nombre?: Prisma.StringFilter<"Usuario"> | string
+  nombre_usuario?: Prisma.StringNullableFilter<"Usuario"> | string | null
   email?: Prisma.StringFilter<"Usuario"> | string
   contrasena?: Prisma.StringFilter<"Usuario"> | string
+  telefono?: Prisma.StringNullableFilter<"Usuario"> | string | null
   rol?: Prisma.StringFilter<"Usuario"> | string
-  creado?: Prisma.DateTimeFilter<"Usuario"> | Date | string
-  actualizado?: Prisma.DateTimeFilter<"Usuario"> | Date | string
+  creado?: Prisma.DateTimeNullableFilter<"Usuario"> | Date | string | null
+  actualizado?: Prisma.DateTimeNullableFilter<"Usuario"> | Date | string | null
   pref_usuario?: Prisma.XOR<Prisma.Pref_usuarioNullableScalarRelationFilter, Prisma.Pref_usuarioWhereInput> | null
-  conversaciones?: Prisma.ConversacionListRelationFilter
   favoritos?: Prisma.FavoritosListRelationFilter
+  itinerarios?: Prisma.ItinerarioListRelationFilter
+  conversaciones?: Prisma.ConversacionListRelationFilter
   interacciones?: Prisma.Item_interaccionListRelationFilter
   analisis?: Prisma.Analisis_EventoListRelationFilter
-  itinerarios?: Prisma.ItinerarioListRelationFilter
 }
 
 export type UsuarioOrderByWithRelationInput = {
   id_usuario?: Prisma.SortOrder
   nombre?: Prisma.SortOrder
+  nombre_usuario?: Prisma.SortOrderInput | Prisma.SortOrder
   email?: Prisma.SortOrder
   contrasena?: Prisma.SortOrder
+  telefono?: Prisma.SortOrderInput | Prisma.SortOrder
   rol?: Prisma.SortOrder
-  creado?: Prisma.SortOrder
-  actualizado?: Prisma.SortOrder
+  creado?: Prisma.SortOrderInput | Prisma.SortOrder
+  actualizado?: Prisma.SortOrderInput | Prisma.SortOrder
   pref_usuario?: Prisma.Pref_usuarioOrderByWithRelationInput
-  conversaciones?: Prisma.ConversacionOrderByRelationAggregateInput
   favoritos?: Prisma.FavoritosOrderByRelationAggregateInput
+  itinerarios?: Prisma.ItinerarioOrderByRelationAggregateInput
+  conversaciones?: Prisma.ConversacionOrderByRelationAggregateInput
   interacciones?: Prisma.Item_interaccionOrderByRelationAggregateInput
   analisis?: Prisma.Analisis_EventoOrderByRelationAggregateInput
-  itinerarios?: Prisma.ItinerarioOrderByRelationAggregateInput
 }
 
 export type UsuarioWhereUniqueInput = Prisma.AtLeast<{
   id_usuario?: number
+  nombre_usuario?: string
   email?: string
   AND?: Prisma.UsuarioWhereInput | Prisma.UsuarioWhereInput[]
   OR?: Prisma.UsuarioWhereInput[]
   NOT?: Prisma.UsuarioWhereInput | Prisma.UsuarioWhereInput[]
   nombre?: Prisma.StringFilter<"Usuario"> | string
   contrasena?: Prisma.StringFilter<"Usuario"> | string
+  telefono?: Prisma.StringNullableFilter<"Usuario"> | string | null
   rol?: Prisma.StringFilter<"Usuario"> | string
-  creado?: Prisma.DateTimeFilter<"Usuario"> | Date | string
-  actualizado?: Prisma.DateTimeFilter<"Usuario"> | Date | string
+  creado?: Prisma.DateTimeNullableFilter<"Usuario"> | Date | string | null
+  actualizado?: Prisma.DateTimeNullableFilter<"Usuario"> | Date | string | null
   pref_usuario?: Prisma.XOR<Prisma.Pref_usuarioNullableScalarRelationFilter, Prisma.Pref_usuarioWhereInput> | null
-  conversaciones?: Prisma.ConversacionListRelationFilter
   favoritos?: Prisma.FavoritosListRelationFilter
+  itinerarios?: Prisma.ItinerarioListRelationFilter
+  conversaciones?: Prisma.ConversacionListRelationFilter
   interacciones?: Prisma.Item_interaccionListRelationFilter
   analisis?: Prisma.Analisis_EventoListRelationFilter
-  itinerarios?: Prisma.ItinerarioListRelationFilter
-}, "id_usuario" | "email">
+}, "id_usuario" | "nombre_usuario" | "email">
 
 export type UsuarioOrderByWithAggregationInput = {
   id_usuario?: Prisma.SortOrder
   nombre?: Prisma.SortOrder
+  nombre_usuario?: Prisma.SortOrderInput | Prisma.SortOrder
   email?: Prisma.SortOrder
   contrasena?: Prisma.SortOrder
+  telefono?: Prisma.SortOrderInput | Prisma.SortOrder
   rol?: Prisma.SortOrder
-  creado?: Prisma.SortOrder
-  actualizado?: Prisma.SortOrder
+  creado?: Prisma.SortOrderInput | Prisma.SortOrder
+  actualizado?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.UsuarioCountOrderByAggregateInput
   _avg?: Prisma.UsuarioAvgOrderByAggregateInput
   _max?: Prisma.UsuarioMaxOrderByAggregateInput
@@ -296,109 +318,127 @@ export type UsuarioScalarWhereWithAggregatesInput = {
   NOT?: Prisma.UsuarioScalarWhereWithAggregatesInput | Prisma.UsuarioScalarWhereWithAggregatesInput[]
   id_usuario?: Prisma.IntWithAggregatesFilter<"Usuario"> | number
   nombre?: Prisma.StringWithAggregatesFilter<"Usuario"> | string
+  nombre_usuario?: Prisma.StringNullableWithAggregatesFilter<"Usuario"> | string | null
   email?: Prisma.StringWithAggregatesFilter<"Usuario"> | string
   contrasena?: Prisma.StringWithAggregatesFilter<"Usuario"> | string
+  telefono?: Prisma.StringNullableWithAggregatesFilter<"Usuario"> | string | null
   rol?: Prisma.StringWithAggregatesFilter<"Usuario"> | string
-  creado?: Prisma.DateTimeWithAggregatesFilter<"Usuario"> | Date | string
-  actualizado?: Prisma.DateTimeWithAggregatesFilter<"Usuario"> | Date | string
+  creado?: Prisma.DateTimeNullableWithAggregatesFilter<"Usuario"> | Date | string | null
+  actualizado?: Prisma.DateTimeNullableWithAggregatesFilter<"Usuario"> | Date | string | null
 }
 
 export type UsuarioCreateInput = {
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   pref_usuario?: Prisma.Pref_usuarioCreateNestedOneWithoutUsuarioInput
-  conversaciones?: Prisma.ConversacionCreateNestedManyWithoutUsuarioInput
   favoritos?: Prisma.FavoritosCreateNestedManyWithoutUsuarioInput
+  itinerarios?: Prisma.ItinerarioCreateNestedManyWithoutUsuarioInput
+  conversaciones?: Prisma.ConversacionCreateNestedManyWithoutUsuarioInput
   interacciones?: Prisma.Item_interaccionCreateNestedManyWithoutUsuarioInput
   analisis?: Prisma.Analisis_EventoCreateNestedManyWithoutUsuarioInput
-  itinerarios?: Prisma.ItinerarioCreateNestedManyWithoutUsuarioInput
 }
 
 export type UsuarioUncheckedCreateInput = {
   id_usuario?: number
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUncheckedCreateNestedOneWithoutUsuarioInput
-  conversaciones?: Prisma.ConversacionUncheckedCreateNestedManyWithoutUsuarioInput
   favoritos?: Prisma.FavoritosUncheckedCreateNestedManyWithoutUsuarioInput
+  itinerarios?: Prisma.ItinerarioUncheckedCreateNestedManyWithoutUsuarioInput
+  conversaciones?: Prisma.ConversacionUncheckedCreateNestedManyWithoutUsuarioInput
   interacciones?: Prisma.Item_interaccionUncheckedCreateNestedManyWithoutUsuarioInput
   analisis?: Prisma.Analisis_EventoUncheckedCreateNestedManyWithoutUsuarioInput
-  itinerarios?: Prisma.ItinerarioUncheckedCreateNestedManyWithoutUsuarioInput
 }
 
 export type UsuarioUpdateInput = {
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUpdateOneWithoutUsuarioNestedInput
-  conversaciones?: Prisma.ConversacionUpdateManyWithoutUsuarioNestedInput
   favoritos?: Prisma.FavoritosUpdateManyWithoutUsuarioNestedInput
+  itinerarios?: Prisma.ItinerarioUpdateManyWithoutUsuarioNestedInput
+  conversaciones?: Prisma.ConversacionUpdateManyWithoutUsuarioNestedInput
   interacciones?: Prisma.Item_interaccionUpdateManyWithoutUsuarioNestedInput
   analisis?: Prisma.Analisis_EventoUpdateManyWithoutUsuarioNestedInput
-  itinerarios?: Prisma.ItinerarioUpdateManyWithoutUsuarioNestedInput
 }
 
 export type UsuarioUncheckedUpdateInput = {
   id_usuario?: Prisma.IntFieldUpdateOperationsInput | number
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUncheckedUpdateOneWithoutUsuarioNestedInput
-  conversaciones?: Prisma.ConversacionUncheckedUpdateManyWithoutUsuarioNestedInput
   favoritos?: Prisma.FavoritosUncheckedUpdateManyWithoutUsuarioNestedInput
+  itinerarios?: Prisma.ItinerarioUncheckedUpdateManyWithoutUsuarioNestedInput
+  conversaciones?: Prisma.ConversacionUncheckedUpdateManyWithoutUsuarioNestedInput
   interacciones?: Prisma.Item_interaccionUncheckedUpdateManyWithoutUsuarioNestedInput
   analisis?: Prisma.Analisis_EventoUncheckedUpdateManyWithoutUsuarioNestedInput
-  itinerarios?: Prisma.ItinerarioUncheckedUpdateManyWithoutUsuarioNestedInput
 }
 
 export type UsuarioCreateManyInput = {
   id_usuario?: number
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
 }
 
 export type UsuarioUpdateManyMutationInput = {
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
 export type UsuarioUncheckedUpdateManyInput = {
   id_usuario?: Prisma.IntFieldUpdateOperationsInput | number
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
 export type UsuarioCountOrderByAggregateInput = {
   id_usuario?: Prisma.SortOrder
   nombre?: Prisma.SortOrder
+  nombre_usuario?: Prisma.SortOrder
   email?: Prisma.SortOrder
   contrasena?: Prisma.SortOrder
+  telefono?: Prisma.SortOrder
   rol?: Prisma.SortOrder
   creado?: Prisma.SortOrder
   actualizado?: Prisma.SortOrder
@@ -411,8 +451,10 @@ export type UsuarioAvgOrderByAggregateInput = {
 export type UsuarioMaxOrderByAggregateInput = {
   id_usuario?: Prisma.SortOrder
   nombre?: Prisma.SortOrder
+  nombre_usuario?: Prisma.SortOrder
   email?: Prisma.SortOrder
   contrasena?: Prisma.SortOrder
+  telefono?: Prisma.SortOrder
   rol?: Prisma.SortOrder
   creado?: Prisma.SortOrder
   actualizado?: Prisma.SortOrder
@@ -421,8 +463,10 @@ export type UsuarioMaxOrderByAggregateInput = {
 export type UsuarioMinOrderByAggregateInput = {
   id_usuario?: Prisma.SortOrder
   nombre?: Prisma.SortOrder
+  nombre_usuario?: Prisma.SortOrder
   email?: Prisma.SortOrder
   contrasena?: Prisma.SortOrder
+  telefono?: Prisma.SortOrder
   rol?: Prisma.SortOrder
   creado?: Prisma.SortOrder
   actualizado?: Prisma.SortOrder
@@ -441,8 +485,12 @@ export type StringFieldUpdateOperationsInput = {
   set?: string
 }
 
-export type DateTimeFieldUpdateOperationsInput = {
-  set?: Date | string
+export type NullableStringFieldUpdateOperationsInput = {
+  set?: string | null
+}
+
+export type NullableDateTimeFieldUpdateOperationsInput = {
+  set?: Date | string | null
 }
 
 export type IntFieldUpdateOperationsInput = {
@@ -539,31 +587,35 @@ export type UsuarioUpdateOneRequiredWithoutItinerariosNestedInput = {
 
 export type UsuarioCreateWithoutPref_usuarioInput = {
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
-  conversaciones?: Prisma.ConversacionCreateNestedManyWithoutUsuarioInput
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   favoritos?: Prisma.FavoritosCreateNestedManyWithoutUsuarioInput
+  itinerarios?: Prisma.ItinerarioCreateNestedManyWithoutUsuarioInput
+  conversaciones?: Prisma.ConversacionCreateNestedManyWithoutUsuarioInput
   interacciones?: Prisma.Item_interaccionCreateNestedManyWithoutUsuarioInput
   analisis?: Prisma.Analisis_EventoCreateNestedManyWithoutUsuarioInput
-  itinerarios?: Prisma.ItinerarioCreateNestedManyWithoutUsuarioInput
 }
 
 export type UsuarioUncheckedCreateWithoutPref_usuarioInput = {
   id_usuario?: number
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
-  conversaciones?: Prisma.ConversacionUncheckedCreateNestedManyWithoutUsuarioInput
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   favoritos?: Prisma.FavoritosUncheckedCreateNestedManyWithoutUsuarioInput
+  itinerarios?: Prisma.ItinerarioUncheckedCreateNestedManyWithoutUsuarioInput
+  conversaciones?: Prisma.ConversacionUncheckedCreateNestedManyWithoutUsuarioInput
   interacciones?: Prisma.Item_interaccionUncheckedCreateNestedManyWithoutUsuarioInput
   analisis?: Prisma.Analisis_EventoUncheckedCreateNestedManyWithoutUsuarioInput
-  itinerarios?: Prisma.ItinerarioUncheckedCreateNestedManyWithoutUsuarioInput
 }
 
 export type UsuarioCreateOrConnectWithoutPref_usuarioInput = {
@@ -584,60 +636,68 @@ export type UsuarioUpdateToOneWithWhereWithoutPref_usuarioInput = {
 
 export type UsuarioUpdateWithoutPref_usuarioInput = {
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  conversaciones?: Prisma.ConversacionUpdateManyWithoutUsuarioNestedInput
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   favoritos?: Prisma.FavoritosUpdateManyWithoutUsuarioNestedInput
+  itinerarios?: Prisma.ItinerarioUpdateManyWithoutUsuarioNestedInput
+  conversaciones?: Prisma.ConversacionUpdateManyWithoutUsuarioNestedInput
   interacciones?: Prisma.Item_interaccionUpdateManyWithoutUsuarioNestedInput
   analisis?: Prisma.Analisis_EventoUpdateManyWithoutUsuarioNestedInput
-  itinerarios?: Prisma.ItinerarioUpdateManyWithoutUsuarioNestedInput
 }
 
 export type UsuarioUncheckedUpdateWithoutPref_usuarioInput = {
   id_usuario?: Prisma.IntFieldUpdateOperationsInput | number
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  conversaciones?: Prisma.ConversacionUncheckedUpdateManyWithoutUsuarioNestedInput
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   favoritos?: Prisma.FavoritosUncheckedUpdateManyWithoutUsuarioNestedInput
+  itinerarios?: Prisma.ItinerarioUncheckedUpdateManyWithoutUsuarioNestedInput
+  conversaciones?: Prisma.ConversacionUncheckedUpdateManyWithoutUsuarioNestedInput
   interacciones?: Prisma.Item_interaccionUncheckedUpdateManyWithoutUsuarioNestedInput
   analisis?: Prisma.Analisis_EventoUncheckedUpdateManyWithoutUsuarioNestedInput
-  itinerarios?: Prisma.ItinerarioUncheckedUpdateManyWithoutUsuarioNestedInput
 }
 
 export type UsuarioCreateWithoutFavoritosInput = {
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   pref_usuario?: Prisma.Pref_usuarioCreateNestedOneWithoutUsuarioInput
+  itinerarios?: Prisma.ItinerarioCreateNestedManyWithoutUsuarioInput
   conversaciones?: Prisma.ConversacionCreateNestedManyWithoutUsuarioInput
   interacciones?: Prisma.Item_interaccionCreateNestedManyWithoutUsuarioInput
   analisis?: Prisma.Analisis_EventoCreateNestedManyWithoutUsuarioInput
-  itinerarios?: Prisma.ItinerarioCreateNestedManyWithoutUsuarioInput
 }
 
 export type UsuarioUncheckedCreateWithoutFavoritosInput = {
   id_usuario?: number
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUncheckedCreateNestedOneWithoutUsuarioInput
+  itinerarios?: Prisma.ItinerarioUncheckedCreateNestedManyWithoutUsuarioInput
   conversaciones?: Prisma.ConversacionUncheckedCreateNestedManyWithoutUsuarioInput
   interacciones?: Prisma.Item_interaccionUncheckedCreateNestedManyWithoutUsuarioInput
   analisis?: Prisma.Analisis_EventoUncheckedCreateNestedManyWithoutUsuarioInput
-  itinerarios?: Prisma.ItinerarioUncheckedCreateNestedManyWithoutUsuarioInput
 }
 
 export type UsuarioCreateOrConnectWithoutFavoritosInput = {
@@ -658,60 +718,68 @@ export type UsuarioUpdateToOneWithWhereWithoutFavoritosInput = {
 
 export type UsuarioUpdateWithoutFavoritosInput = {
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUpdateOneWithoutUsuarioNestedInput
+  itinerarios?: Prisma.ItinerarioUpdateManyWithoutUsuarioNestedInput
   conversaciones?: Prisma.ConversacionUpdateManyWithoutUsuarioNestedInput
   interacciones?: Prisma.Item_interaccionUpdateManyWithoutUsuarioNestedInput
   analisis?: Prisma.Analisis_EventoUpdateManyWithoutUsuarioNestedInput
-  itinerarios?: Prisma.ItinerarioUpdateManyWithoutUsuarioNestedInput
 }
 
 export type UsuarioUncheckedUpdateWithoutFavoritosInput = {
   id_usuario?: Prisma.IntFieldUpdateOperationsInput | number
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUncheckedUpdateOneWithoutUsuarioNestedInput
+  itinerarios?: Prisma.ItinerarioUncheckedUpdateManyWithoutUsuarioNestedInput
   conversaciones?: Prisma.ConversacionUncheckedUpdateManyWithoutUsuarioNestedInput
   interacciones?: Prisma.Item_interaccionUncheckedUpdateManyWithoutUsuarioNestedInput
   analisis?: Prisma.Analisis_EventoUncheckedUpdateManyWithoutUsuarioNestedInput
-  itinerarios?: Prisma.ItinerarioUncheckedUpdateManyWithoutUsuarioNestedInput
 }
 
 export type UsuarioCreateWithoutInteraccionesInput = {
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   pref_usuario?: Prisma.Pref_usuarioCreateNestedOneWithoutUsuarioInput
-  conversaciones?: Prisma.ConversacionCreateNestedManyWithoutUsuarioInput
   favoritos?: Prisma.FavoritosCreateNestedManyWithoutUsuarioInput
-  analisis?: Prisma.Analisis_EventoCreateNestedManyWithoutUsuarioInput
   itinerarios?: Prisma.ItinerarioCreateNestedManyWithoutUsuarioInput
+  conversaciones?: Prisma.ConversacionCreateNestedManyWithoutUsuarioInput
+  analisis?: Prisma.Analisis_EventoCreateNestedManyWithoutUsuarioInput
 }
 
 export type UsuarioUncheckedCreateWithoutInteraccionesInput = {
   id_usuario?: number
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUncheckedCreateNestedOneWithoutUsuarioInput
-  conversaciones?: Prisma.ConversacionUncheckedCreateNestedManyWithoutUsuarioInput
   favoritos?: Prisma.FavoritosUncheckedCreateNestedManyWithoutUsuarioInput
-  analisis?: Prisma.Analisis_EventoUncheckedCreateNestedManyWithoutUsuarioInput
   itinerarios?: Prisma.ItinerarioUncheckedCreateNestedManyWithoutUsuarioInput
+  conversaciones?: Prisma.ConversacionUncheckedCreateNestedManyWithoutUsuarioInput
+  analisis?: Prisma.Analisis_EventoUncheckedCreateNestedManyWithoutUsuarioInput
 }
 
 export type UsuarioCreateOrConnectWithoutInteraccionesInput = {
@@ -732,60 +800,68 @@ export type UsuarioUpdateToOneWithWhereWithoutInteraccionesInput = {
 
 export type UsuarioUpdateWithoutInteraccionesInput = {
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUpdateOneWithoutUsuarioNestedInput
-  conversaciones?: Prisma.ConversacionUpdateManyWithoutUsuarioNestedInput
   favoritos?: Prisma.FavoritosUpdateManyWithoutUsuarioNestedInput
-  analisis?: Prisma.Analisis_EventoUpdateManyWithoutUsuarioNestedInput
   itinerarios?: Prisma.ItinerarioUpdateManyWithoutUsuarioNestedInput
+  conversaciones?: Prisma.ConversacionUpdateManyWithoutUsuarioNestedInput
+  analisis?: Prisma.Analisis_EventoUpdateManyWithoutUsuarioNestedInput
 }
 
 export type UsuarioUncheckedUpdateWithoutInteraccionesInput = {
   id_usuario?: Prisma.IntFieldUpdateOperationsInput | number
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUncheckedUpdateOneWithoutUsuarioNestedInput
-  conversaciones?: Prisma.ConversacionUncheckedUpdateManyWithoutUsuarioNestedInput
   favoritos?: Prisma.FavoritosUncheckedUpdateManyWithoutUsuarioNestedInput
-  analisis?: Prisma.Analisis_EventoUncheckedUpdateManyWithoutUsuarioNestedInput
   itinerarios?: Prisma.ItinerarioUncheckedUpdateManyWithoutUsuarioNestedInput
+  conversaciones?: Prisma.ConversacionUncheckedUpdateManyWithoutUsuarioNestedInput
+  analisis?: Prisma.Analisis_EventoUncheckedUpdateManyWithoutUsuarioNestedInput
 }
 
 export type UsuarioCreateWithoutAnalisisInput = {
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   pref_usuario?: Prisma.Pref_usuarioCreateNestedOneWithoutUsuarioInput
-  conversaciones?: Prisma.ConversacionCreateNestedManyWithoutUsuarioInput
   favoritos?: Prisma.FavoritosCreateNestedManyWithoutUsuarioInput
-  interacciones?: Prisma.Item_interaccionCreateNestedManyWithoutUsuarioInput
   itinerarios?: Prisma.ItinerarioCreateNestedManyWithoutUsuarioInput
+  conversaciones?: Prisma.ConversacionCreateNestedManyWithoutUsuarioInput
+  interacciones?: Prisma.Item_interaccionCreateNestedManyWithoutUsuarioInput
 }
 
 export type UsuarioUncheckedCreateWithoutAnalisisInput = {
   id_usuario?: number
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUncheckedCreateNestedOneWithoutUsuarioInput
-  conversaciones?: Prisma.ConversacionUncheckedCreateNestedManyWithoutUsuarioInput
   favoritos?: Prisma.FavoritosUncheckedCreateNestedManyWithoutUsuarioInput
-  interacciones?: Prisma.Item_interaccionUncheckedCreateNestedManyWithoutUsuarioInput
   itinerarios?: Prisma.ItinerarioUncheckedCreateNestedManyWithoutUsuarioInput
+  conversaciones?: Prisma.ConversacionUncheckedCreateNestedManyWithoutUsuarioInput
+  interacciones?: Prisma.Item_interaccionUncheckedCreateNestedManyWithoutUsuarioInput
 }
 
 export type UsuarioCreateOrConnectWithoutAnalisisInput = {
@@ -806,60 +882,68 @@ export type UsuarioUpdateToOneWithWhereWithoutAnalisisInput = {
 
 export type UsuarioUpdateWithoutAnalisisInput = {
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUpdateOneWithoutUsuarioNestedInput
-  conversaciones?: Prisma.ConversacionUpdateManyWithoutUsuarioNestedInput
   favoritos?: Prisma.FavoritosUpdateManyWithoutUsuarioNestedInput
-  interacciones?: Prisma.Item_interaccionUpdateManyWithoutUsuarioNestedInput
   itinerarios?: Prisma.ItinerarioUpdateManyWithoutUsuarioNestedInput
+  conversaciones?: Prisma.ConversacionUpdateManyWithoutUsuarioNestedInput
+  interacciones?: Prisma.Item_interaccionUpdateManyWithoutUsuarioNestedInput
 }
 
 export type UsuarioUncheckedUpdateWithoutAnalisisInput = {
   id_usuario?: Prisma.IntFieldUpdateOperationsInput | number
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUncheckedUpdateOneWithoutUsuarioNestedInput
-  conversaciones?: Prisma.ConversacionUncheckedUpdateManyWithoutUsuarioNestedInput
   favoritos?: Prisma.FavoritosUncheckedUpdateManyWithoutUsuarioNestedInput
-  interacciones?: Prisma.Item_interaccionUncheckedUpdateManyWithoutUsuarioNestedInput
   itinerarios?: Prisma.ItinerarioUncheckedUpdateManyWithoutUsuarioNestedInput
+  conversaciones?: Prisma.ConversacionUncheckedUpdateManyWithoutUsuarioNestedInput
+  interacciones?: Prisma.Item_interaccionUncheckedUpdateManyWithoutUsuarioNestedInput
 }
 
 export type UsuarioCreateWithoutConversacionesInput = {
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   pref_usuario?: Prisma.Pref_usuarioCreateNestedOneWithoutUsuarioInput
   favoritos?: Prisma.FavoritosCreateNestedManyWithoutUsuarioInput
+  itinerarios?: Prisma.ItinerarioCreateNestedManyWithoutUsuarioInput
   interacciones?: Prisma.Item_interaccionCreateNestedManyWithoutUsuarioInput
   analisis?: Prisma.Analisis_EventoCreateNestedManyWithoutUsuarioInput
-  itinerarios?: Prisma.ItinerarioCreateNestedManyWithoutUsuarioInput
 }
 
 export type UsuarioUncheckedCreateWithoutConversacionesInput = {
   id_usuario?: number
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUncheckedCreateNestedOneWithoutUsuarioInput
   favoritos?: Prisma.FavoritosUncheckedCreateNestedManyWithoutUsuarioInput
+  itinerarios?: Prisma.ItinerarioUncheckedCreateNestedManyWithoutUsuarioInput
   interacciones?: Prisma.Item_interaccionUncheckedCreateNestedManyWithoutUsuarioInput
   analisis?: Prisma.Analisis_EventoUncheckedCreateNestedManyWithoutUsuarioInput
-  itinerarios?: Prisma.ItinerarioUncheckedCreateNestedManyWithoutUsuarioInput
 }
 
 export type UsuarioCreateOrConnectWithoutConversacionesInput = {
@@ -880,43 +964,49 @@ export type UsuarioUpdateToOneWithWhereWithoutConversacionesInput = {
 
 export type UsuarioUpdateWithoutConversacionesInput = {
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUpdateOneWithoutUsuarioNestedInput
   favoritos?: Prisma.FavoritosUpdateManyWithoutUsuarioNestedInput
+  itinerarios?: Prisma.ItinerarioUpdateManyWithoutUsuarioNestedInput
   interacciones?: Prisma.Item_interaccionUpdateManyWithoutUsuarioNestedInput
   analisis?: Prisma.Analisis_EventoUpdateManyWithoutUsuarioNestedInput
-  itinerarios?: Prisma.ItinerarioUpdateManyWithoutUsuarioNestedInput
 }
 
 export type UsuarioUncheckedUpdateWithoutConversacionesInput = {
   id_usuario?: Prisma.IntFieldUpdateOperationsInput | number
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUncheckedUpdateOneWithoutUsuarioNestedInput
   favoritos?: Prisma.FavoritosUncheckedUpdateManyWithoutUsuarioNestedInput
+  itinerarios?: Prisma.ItinerarioUncheckedUpdateManyWithoutUsuarioNestedInput
   interacciones?: Prisma.Item_interaccionUncheckedUpdateManyWithoutUsuarioNestedInput
   analisis?: Prisma.Analisis_EventoUncheckedUpdateManyWithoutUsuarioNestedInput
-  itinerarios?: Prisma.ItinerarioUncheckedUpdateManyWithoutUsuarioNestedInput
 }
 
 export type UsuarioCreateWithoutItinerariosInput = {
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   pref_usuario?: Prisma.Pref_usuarioCreateNestedOneWithoutUsuarioInput
-  conversaciones?: Prisma.ConversacionCreateNestedManyWithoutUsuarioInput
   favoritos?: Prisma.FavoritosCreateNestedManyWithoutUsuarioInput
+  conversaciones?: Prisma.ConversacionCreateNestedManyWithoutUsuarioInput
   interacciones?: Prisma.Item_interaccionCreateNestedManyWithoutUsuarioInput
   analisis?: Prisma.Analisis_EventoCreateNestedManyWithoutUsuarioInput
 }
@@ -924,14 +1014,16 @@ export type UsuarioCreateWithoutItinerariosInput = {
 export type UsuarioUncheckedCreateWithoutItinerariosInput = {
   id_usuario?: number
   nombre: string
+  nombre_usuario?: string | null
   email: string
   contrasena: string
+  telefono?: string | null
   rol: string
-  creado: Date | string
-  actualizado: Date | string
+  creado?: Date | string | null
+  actualizado?: Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUncheckedCreateNestedOneWithoutUsuarioInput
-  conversaciones?: Prisma.ConversacionUncheckedCreateNestedManyWithoutUsuarioInput
   favoritos?: Prisma.FavoritosUncheckedCreateNestedManyWithoutUsuarioInput
+  conversaciones?: Prisma.ConversacionUncheckedCreateNestedManyWithoutUsuarioInput
   interacciones?: Prisma.Item_interaccionUncheckedCreateNestedManyWithoutUsuarioInput
   analisis?: Prisma.Analisis_EventoUncheckedCreateNestedManyWithoutUsuarioInput
 }
@@ -954,14 +1046,16 @@ export type UsuarioUpdateToOneWithWhereWithoutItinerariosInput = {
 
 export type UsuarioUpdateWithoutItinerariosInput = {
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUpdateOneWithoutUsuarioNestedInput
-  conversaciones?: Prisma.ConversacionUpdateManyWithoutUsuarioNestedInput
   favoritos?: Prisma.FavoritosUpdateManyWithoutUsuarioNestedInput
+  conversaciones?: Prisma.ConversacionUpdateManyWithoutUsuarioNestedInput
   interacciones?: Prisma.Item_interaccionUpdateManyWithoutUsuarioNestedInput
   analisis?: Prisma.Analisis_EventoUpdateManyWithoutUsuarioNestedInput
 }
@@ -969,14 +1063,16 @@ export type UsuarioUpdateWithoutItinerariosInput = {
 export type UsuarioUncheckedUpdateWithoutItinerariosInput = {
   id_usuario?: Prisma.IntFieldUpdateOperationsInput | number
   nombre?: Prisma.StringFieldUpdateOperationsInput | string
+  nombre_usuario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   email?: Prisma.StringFieldUpdateOperationsInput | string
   contrasena?: Prisma.StringFieldUpdateOperationsInput | string
+  telefono?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   rol?: Prisma.StringFieldUpdateOperationsInput | string
-  creado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  actualizado?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  creado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  actualizado?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   pref_usuario?: Prisma.Pref_usuarioUncheckedUpdateOneWithoutUsuarioNestedInput
-  conversaciones?: Prisma.ConversacionUncheckedUpdateManyWithoutUsuarioNestedInput
   favoritos?: Prisma.FavoritosUncheckedUpdateManyWithoutUsuarioNestedInput
+  conversaciones?: Prisma.ConversacionUncheckedUpdateManyWithoutUsuarioNestedInput
   interacciones?: Prisma.Item_interaccionUncheckedUpdateManyWithoutUsuarioNestedInput
   analisis?: Prisma.Analisis_EventoUncheckedUpdateManyWithoutUsuarioNestedInput
 }
@@ -987,19 +1083,19 @@ export type UsuarioUncheckedUpdateWithoutItinerariosInput = {
  */
 
 export type UsuarioCountOutputType = {
-  conversaciones: number
   favoritos: number
+  itinerarios: number
+  conversaciones: number
   interacciones: number
   analisis: number
-  itinerarios: number
 }
 
 export type UsuarioCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  conversaciones?: boolean | UsuarioCountOutputTypeCountConversacionesArgs
   favoritos?: boolean | UsuarioCountOutputTypeCountFavoritosArgs
+  itinerarios?: boolean | UsuarioCountOutputTypeCountItinerariosArgs
+  conversaciones?: boolean | UsuarioCountOutputTypeCountConversacionesArgs
   interacciones?: boolean | UsuarioCountOutputTypeCountInteraccionesArgs
   analisis?: boolean | UsuarioCountOutputTypeCountAnalisisArgs
-  itinerarios?: boolean | UsuarioCountOutputTypeCountItinerariosArgs
 }
 
 /**
@@ -1015,15 +1111,22 @@ export type UsuarioCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Exte
 /**
  * UsuarioCountOutputType without action
  */
-export type UsuarioCountOutputTypeCountConversacionesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.ConversacionWhereInput
+export type UsuarioCountOutputTypeCountFavoritosArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.FavoritosWhereInput
 }
 
 /**
  * UsuarioCountOutputType without action
  */
-export type UsuarioCountOutputTypeCountFavoritosArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.FavoritosWhereInput
+export type UsuarioCountOutputTypeCountItinerariosArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ItinerarioWhereInput
+}
+
+/**
+ * UsuarioCountOutputType without action
+ */
+export type UsuarioCountOutputTypeCountConversacionesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ConversacionWhereInput
 }
 
 /**
@@ -1040,36 +1143,33 @@ export type UsuarioCountOutputTypeCountAnalisisArgs<ExtArgs extends runtime.Type
   where?: Prisma.Analisis_EventoWhereInput
 }
 
-/**
- * UsuarioCountOutputType without action
- */
-export type UsuarioCountOutputTypeCountItinerariosArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  where?: Prisma.ItinerarioWhereInput
-}
-
 
 export type UsuarioSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id_usuario?: boolean
   nombre?: boolean
+  nombre_usuario?: boolean
   email?: boolean
   contrasena?: boolean
+  telefono?: boolean
   rol?: boolean
   creado?: boolean
   actualizado?: boolean
   pref_usuario?: boolean | Prisma.Usuario$pref_usuarioArgs<ExtArgs>
-  conversaciones?: boolean | Prisma.Usuario$conversacionesArgs<ExtArgs>
   favoritos?: boolean | Prisma.Usuario$favoritosArgs<ExtArgs>
+  itinerarios?: boolean | Prisma.Usuario$itinerariosArgs<ExtArgs>
+  conversaciones?: boolean | Prisma.Usuario$conversacionesArgs<ExtArgs>
   interacciones?: boolean | Prisma.Usuario$interaccionesArgs<ExtArgs>
   analisis?: boolean | Prisma.Usuario$analisisArgs<ExtArgs>
-  itinerarios?: boolean | Prisma.Usuario$itinerariosArgs<ExtArgs>
   _count?: boolean | Prisma.UsuarioCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["usuario"]>
 
 export type UsuarioSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id_usuario?: boolean
   nombre?: boolean
+  nombre_usuario?: boolean
   email?: boolean
   contrasena?: boolean
+  telefono?: boolean
   rol?: boolean
   creado?: boolean
   actualizado?: boolean
@@ -1078,8 +1178,10 @@ export type UsuarioSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
 export type UsuarioSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id_usuario?: boolean
   nombre?: boolean
+  nombre_usuario?: boolean
   email?: boolean
   contrasena?: boolean
+  telefono?: boolean
   rol?: boolean
   creado?: boolean
   actualizado?: boolean
@@ -1088,21 +1190,23 @@ export type UsuarioSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
 export type UsuarioSelectScalar = {
   id_usuario?: boolean
   nombre?: boolean
+  nombre_usuario?: boolean
   email?: boolean
   contrasena?: boolean
+  telefono?: boolean
   rol?: boolean
   creado?: boolean
   actualizado?: boolean
 }
 
-export type UsuarioOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id_usuario" | "nombre" | "email" | "contrasena" | "rol" | "creado" | "actualizado", ExtArgs["result"]["usuario"]>
+export type UsuarioOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id_usuario" | "nombre" | "nombre_usuario" | "email" | "contrasena" | "telefono" | "rol" | "creado" | "actualizado", ExtArgs["result"]["usuario"]>
 export type UsuarioInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   pref_usuario?: boolean | Prisma.Usuario$pref_usuarioArgs<ExtArgs>
-  conversaciones?: boolean | Prisma.Usuario$conversacionesArgs<ExtArgs>
   favoritos?: boolean | Prisma.Usuario$favoritosArgs<ExtArgs>
+  itinerarios?: boolean | Prisma.Usuario$itinerariosArgs<ExtArgs>
+  conversaciones?: boolean | Prisma.Usuario$conversacionesArgs<ExtArgs>
   interacciones?: boolean | Prisma.Usuario$interaccionesArgs<ExtArgs>
   analisis?: boolean | Prisma.Usuario$analisisArgs<ExtArgs>
-  itinerarios?: boolean | Prisma.Usuario$itinerariosArgs<ExtArgs>
   _count?: boolean | Prisma.UsuarioCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UsuarioIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -1112,20 +1216,22 @@ export type $UsuarioPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
   name: "Usuario"
   objects: {
     pref_usuario: Prisma.$Pref_usuarioPayload<ExtArgs> | null
-    conversaciones: Prisma.$ConversacionPayload<ExtArgs>[]
     favoritos: Prisma.$FavoritosPayload<ExtArgs>[]
+    itinerarios: Prisma.$ItinerarioPayload<ExtArgs>[]
+    conversaciones: Prisma.$ConversacionPayload<ExtArgs>[]
     interacciones: Prisma.$Item_interaccionPayload<ExtArgs>[]
     analisis: Prisma.$Analisis_EventoPayload<ExtArgs>[]
-    itinerarios: Prisma.$ItinerarioPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id_usuario: number
     nombre: string
+    nombre_usuario: string | null
     email: string
     contrasena: string
+    telefono: string | null
     rol: string
-    creado: Date
-    actualizado: Date
+    creado: Date | null
+    actualizado: Date | null
   }, ExtArgs["result"]["usuario"]>
   composites: {}
 }
@@ -1521,11 +1627,11 @@ readonly fields: UsuarioFieldRefs;
 export interface Prisma__UsuarioClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   pref_usuario<T extends Prisma.Usuario$pref_usuarioArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$pref_usuarioArgs<ExtArgs>>): Prisma.Prisma__Pref_usuarioClient<runtime.Types.Result.GetResult<Prisma.$Pref_usuarioPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
-  conversaciones<T extends Prisma.Usuario$conversacionesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$conversacionesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ConversacionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   favoritos<T extends Prisma.Usuario$favoritosArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$favoritosArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$FavoritosPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  itinerarios<T extends Prisma.Usuario$itinerariosArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$itinerariosArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ItinerarioPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  conversaciones<T extends Prisma.Usuario$conversacionesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$conversacionesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ConversacionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   interacciones<T extends Prisma.Usuario$interaccionesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$interaccionesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$Item_interaccionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   analisis<T extends Prisma.Usuario$analisisArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$analisisArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$Analisis_EventoPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
-  itinerarios<T extends Prisma.Usuario$itinerariosArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Usuario$itinerariosArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ItinerarioPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1557,8 +1663,10 @@ export interface Prisma__UsuarioClient<T, Null = never, ExtArgs extends runtime.
 export interface UsuarioFieldRefs {
   readonly id_usuario: Prisma.FieldRef<"Usuario", 'Int'>
   readonly nombre: Prisma.FieldRef<"Usuario", 'String'>
+  readonly nombre_usuario: Prisma.FieldRef<"Usuario", 'String'>
   readonly email: Prisma.FieldRef<"Usuario", 'String'>
   readonly contrasena: Prisma.FieldRef<"Usuario", 'String'>
+  readonly telefono: Prisma.FieldRef<"Usuario", 'String'>
   readonly rol: Prisma.FieldRef<"Usuario", 'String'>
   readonly creado: Prisma.FieldRef<"Usuario", 'DateTime'>
   readonly actualizado: Prisma.FieldRef<"Usuario", 'DateTime'>
@@ -1758,11 +1866,6 @@ export type UsuarioFindManyArgs<ExtArgs extends runtime.Types.Extensions.Interna
    * Skip the first `n` Usuarios.
    */
   skip?: number
-  /**
-   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-   * 
-   * Filter by unique combinations of Usuarios.
-   */
   distinct?: Prisma.UsuarioScalarFieldEnum | Prisma.UsuarioScalarFieldEnum[]
 }
 
@@ -1974,30 +2077,6 @@ export type Usuario$pref_usuarioArgs<ExtArgs extends runtime.Types.Extensions.In
 }
 
 /**
- * Usuario.conversaciones
- */
-export type Usuario$conversacionesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the Conversacion
-   */
-  select?: Prisma.ConversacionSelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the Conversacion
-   */
-  omit?: Prisma.ConversacionOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.ConversacionInclude<ExtArgs> | null
-  where?: Prisma.ConversacionWhereInput
-  orderBy?: Prisma.ConversacionOrderByWithRelationInput | Prisma.ConversacionOrderByWithRelationInput[]
-  cursor?: Prisma.ConversacionWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.ConversacionScalarFieldEnum | Prisma.ConversacionScalarFieldEnum[]
-}
-
-/**
  * Usuario.favoritos
  */
 export type Usuario$favoritosArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -2019,6 +2098,54 @@ export type Usuario$favoritosArgs<ExtArgs extends runtime.Types.Extensions.Inter
   take?: number
   skip?: number
   distinct?: Prisma.FavoritosScalarFieldEnum | Prisma.FavoritosScalarFieldEnum[]
+}
+
+/**
+ * Usuario.itinerarios
+ */
+export type Usuario$itinerariosArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Itinerario
+   */
+  select?: Prisma.ItinerarioSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Itinerario
+   */
+  omit?: Prisma.ItinerarioOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ItinerarioInclude<ExtArgs> | null
+  where?: Prisma.ItinerarioWhereInput
+  orderBy?: Prisma.ItinerarioOrderByWithRelationInput | Prisma.ItinerarioOrderByWithRelationInput[]
+  cursor?: Prisma.ItinerarioWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ItinerarioScalarFieldEnum | Prisma.ItinerarioScalarFieldEnum[]
+}
+
+/**
+ * Usuario.conversaciones
+ */
+export type Usuario$conversacionesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Conversacion
+   */
+  select?: Prisma.ConversacionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Conversacion
+   */
+  omit?: Prisma.ConversacionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ConversacionInclude<ExtArgs> | null
+  where?: Prisma.ConversacionWhereInput
+  orderBy?: Prisma.ConversacionOrderByWithRelationInput | Prisma.ConversacionOrderByWithRelationInput[]
+  cursor?: Prisma.ConversacionWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ConversacionScalarFieldEnum | Prisma.ConversacionScalarFieldEnum[]
 }
 
 /**
@@ -2067,30 +2194,6 @@ export type Usuario$analisisArgs<ExtArgs extends runtime.Types.Extensions.Intern
   take?: number
   skip?: number
   distinct?: Prisma.Analisis_EventoScalarFieldEnum | Prisma.Analisis_EventoScalarFieldEnum[]
-}
-
-/**
- * Usuario.itinerarios
- */
-export type Usuario$itinerariosArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
-  /**
-   * Select specific fields to fetch from the Itinerario
-   */
-  select?: Prisma.ItinerarioSelect<ExtArgs> | null
-  /**
-   * Omit specific fields from the Itinerario
-   */
-  omit?: Prisma.ItinerarioOmit<ExtArgs> | null
-  /**
-   * Choose, which related nodes to fetch as well
-   */
-  include?: Prisma.ItinerarioInclude<ExtArgs> | null
-  where?: Prisma.ItinerarioWhereInput
-  orderBy?: Prisma.ItinerarioOrderByWithRelationInput | Prisma.ItinerarioOrderByWithRelationInput[]
-  cursor?: Prisma.ItinerarioWhereUniqueInput
-  take?: number
-  skip?: number
-  distinct?: Prisma.ItinerarioScalarFieldEnum | Prisma.ItinerarioScalarFieldEnum[]
 }
 
 /**

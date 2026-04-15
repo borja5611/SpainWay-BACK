@@ -8,7 +8,7 @@
  *
  * 🟢 You can import this file directly.
  */
-import type * as runtime from "@prisma/client/runtime/client"
+import type * as runtime from "@prisma/client/runtime/library"
 import type * as $Enums from "../enums.js"
 import type * as Prisma from "../internal/prismaNamespace.js"
 
@@ -314,7 +314,7 @@ export type PoiGroupByOutputType = {
   _max: PoiMaxAggregateOutputType | null
 }
 
-export type GetPoiGroupByPayload<T extends PoiGroupByArgs> = Prisma.PrismaPromise<
+type GetPoiGroupByPayload<T extends PoiGroupByArgs> = Prisma.PrismaPromise<
   Array<
     Prisma.PickEnumerable<PoiGroupByOutputType, T['by']> &
       {
@@ -819,10 +819,6 @@ export type PoiUncheckedUpdateManyWithoutCategoria_poiNestedInput = {
   update?: Prisma.PoiUpdateWithWhereUniqueWithoutCategoria_poiInput | Prisma.PoiUpdateWithWhereUniqueWithoutCategoria_poiInput[]
   updateMany?: Prisma.PoiUpdateManyWithWhereWithoutCategoria_poiInput | Prisma.PoiUpdateManyWithWhereWithoutCategoria_poiInput[]
   deleteMany?: Prisma.PoiScalarWhereInput | Prisma.PoiScalarWhereInput[]
-}
-
-export type NullableDateTimeFieldUpdateOperationsInput = {
-  set?: Date | string | null
 }
 
 export type PoiCreateNestedOneWithoutProgramacionesInput = {
@@ -2544,11 +2540,6 @@ export type PoiFindManyArgs<ExtArgs extends runtime.Types.Extensions.InternalArg
    * Skip the first `n` Pois.
    */
   skip?: number
-  /**
-   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-   * 
-   * Filter by unique combinations of Pois.
-   */
   distinct?: Prisma.PoiScalarFieldEnum | Prisma.PoiScalarFieldEnum[]
 }
 

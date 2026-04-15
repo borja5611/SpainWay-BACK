@@ -8,7 +8,7 @@
  *
  * 🟢 You can import this file directly.
  */
-import type * as runtime from "@prisma/client/runtime/client"
+import type * as runtime from "@prisma/client/runtime/library"
 import type * as $Enums from "../enums.js"
 import type * as Prisma from "../internal/prismaNamespace.js"
 
@@ -178,7 +178,7 @@ export type Categoria_poiGroupByOutputType = {
   _max: Categoria_poiMaxAggregateOutputType | null
 }
 
-export type GetCategoria_poiGroupByPayload<T extends Categoria_poiGroupByArgs> = Prisma.PrismaPromise<
+type GetCategoria_poiGroupByPayload<T extends Categoria_poiGroupByArgs> = Prisma.PrismaPromise<
   Array<
     Prisma.PickEnumerable<Categoria_poiGroupByOutputType, T['by']> &
       {
@@ -1063,11 +1063,6 @@ export type Categoria_poiFindManyArgs<ExtArgs extends runtime.Types.Extensions.I
    * Skip the first `n` Categoria_pois.
    */
   skip?: number
-  /**
-   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-   * 
-   * Filter by unique combinations of Categoria_pois.
-   */
   distinct?: Prisma.Categoria_poiScalarFieldEnum | Prisma.Categoria_poiScalarFieldEnum[]
 }
 

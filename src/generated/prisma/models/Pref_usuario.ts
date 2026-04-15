@@ -8,7 +8,7 @@
  *
  * 🟢 You can import this file directly.
  */
-import type * as runtime from "@prisma/client/runtime/client"
+import type * as runtime from "@prisma/client/runtime/library"
 import type * as $Enums from "../enums.js"
 import type * as Prisma from "../internal/prismaNamespace.js"
 
@@ -221,7 +221,7 @@ export type Pref_usuarioGroupByOutputType = {
   _max: Pref_usuarioMaxAggregateOutputType | null
 }
 
-export type GetPref_usuarioGroupByPayload<T extends Pref_usuarioGroupByArgs> = Prisma.PrismaPromise<
+type GetPref_usuarioGroupByPayload<T extends Pref_usuarioGroupByArgs> = Prisma.PrismaPromise<
   Array<
     Prisma.PickEnumerable<Pref_usuarioGroupByOutputType, T['by']> &
       {
@@ -469,10 +469,6 @@ export type NullableIntFieldUpdateOperationsInput = {
   decrement?: number
   multiply?: number
   divide?: number
-}
-
-export type NullableStringFieldUpdateOperationsInput = {
-  set?: string | null
 }
 
 export type NullableBoolFieldUpdateOperationsInput = {
@@ -1235,11 +1231,6 @@ export type Pref_usuarioFindManyArgs<ExtArgs extends runtime.Types.Extensions.In
    * Skip the first `n` Pref_usuarios.
    */
   skip?: number
-  /**
-   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-   * 
-   * Filter by unique combinations of Pref_usuarios.
-   */
   distinct?: Prisma.Pref_usuarioScalarFieldEnum | Prisma.Pref_usuarioScalarFieldEnum[]
 }
 

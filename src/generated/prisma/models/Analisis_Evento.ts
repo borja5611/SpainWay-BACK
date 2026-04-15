@@ -8,7 +8,7 @@
  *
  * 🟢 You can import this file directly.
  */
-import type * as runtime from "@prisma/client/runtime/client"
+import type * as runtime from "@prisma/client/runtime/library"
 import type * as $Enums from "../enums.js"
 import type * as Prisma from "../internal/prismaNamespace.js"
 
@@ -214,7 +214,7 @@ export type Analisis_EventoGroupByOutputType = {
   _max: Analisis_EventoMaxAggregateOutputType | null
 }
 
-export type GetAnalisis_EventoGroupByPayload<T extends Analisis_EventoGroupByArgs> = Prisma.PrismaPromise<
+type GetAnalisis_EventoGroupByPayload<T extends Analisis_EventoGroupByArgs> = Prisma.PrismaPromise<
   Array<
     Prisma.PickEnumerable<Analisis_EventoGroupByOutputType, T['by']> &
       {
@@ -1243,11 +1243,6 @@ export type Analisis_EventoFindManyArgs<ExtArgs extends runtime.Types.Extensions
    * Skip the first `n` Analisis_Eventos.
    */
   skip?: number
-  /**
-   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-   * 
-   * Filter by unique combinations of Analisis_Eventos.
-   */
   distinct?: Prisma.Analisis_EventoScalarFieldEnum | Prisma.Analisis_EventoScalarFieldEnum[]
 }
 

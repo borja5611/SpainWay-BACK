@@ -1,28 +1,29 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-
 model Usuario {
-  id_usuario     Int                 @id @default(autoincrement())
-  nombre         String              @db.VarChar(100)
-  email          String              @unique @db.VarChar(150)
-  contrasena     String              @map("contraseña") @db.VarChar(255)
-  rol            String              @db.VarChar(50)
-  creado         DateTime
-  actualizado    DateTime
+  id_usuario       Int                  @id @default(autoincrement())
+  nombre           String               @db.VarChar(150)
+  nombre_usuario   String?              @unique @db.VarChar(80)
+  email            String               @unique @db.VarChar(150)
+  contrasena       String               @map("contraseña") @db.VarChar(255)
+  telefono         String?              @db.VarChar(30)
+  rol              String               @db.VarChar(50)
+  creado           DateTime?            @default(now())
+  actualizado      DateTime?            @updatedAt
 
-  pref_usuario   Pref_usuario?
-  conversaciones Conversacion[]
-  favoritos      Favoritos[]
-  interacciones  Item_interaccion[]
-  analisis       Analisis_Evento[]
-  itinerarios    Itinerario[]
+  pref_usuario     Pref_usuario?
+  favoritos        Favoritos[]
+  itinerarios      Itinerario[]
+  conversaciones   Conversacion[]
+  interacciones    Item_interaccion[]
+  analisis         Analisis_Evento[]
 
   @@map("Usuario")
 }

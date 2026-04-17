@@ -7,7 +7,7 @@ from shapely.geometry import Point
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-CSV_IN = BASE_DIR / "data" / "NATIONAL_MASTER_POIS.csv"
+CSV_IN = BASE_DIR / "data" /  "NATIONAL_MASTER_POIS.csv"
 CSV_OUT = BASE_DIR / "data" / "procesado" / "NATIONAL_MASTER_POIS_ENRIQUECIDO.csv"
 
 # Municipios

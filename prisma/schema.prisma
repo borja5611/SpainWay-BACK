@@ -118,6 +118,7 @@ model Poi {
   favoritos        Favoritos[]
   interacciones    Item_interaccion[]
   elementos        Elemento_Itinerario[]
+  destacados_ccaa  Poi_destacado_ccaa[]
 
   @@map("Poi")
 }
@@ -263,4 +264,25 @@ model Elemento_Itinerario {
   poi                    Poi             @relation(fields: [id_poi], references: [id_poi], onDelete: Cascade)
 
   @@map("Elemento_Itinerario")
+}
+
+model Poi_destacado_ccaa {
+  id_poi_destacado_ccaa Int      @id @default(autoincrement())
+  id_poi               Int
+  comunidad            String    @db.VarChar(100)
+  ciudad_fuente        String?   @db.VarChar(100)
+  provincia_fuente     String?   @db.VarChar(100)
+  poi_canonico         String    @db.VarChar(200)
+  fuente               String    @db.VarChar(100)
+  fuente_tipo          String    @db.VarChar(50)
+  url_fuente           String?   @db.VarChar(500)
+  prioridad_fuente     Int
+  match_confianza      Float?
+  motivo               String?   @db.VarChar(255)
+  created_at           DateTime? @default(now())
+
+  poi Poi @relation(fields: [id_poi], references: [id_poi], onDelete: Cascade)
+
+  @@unique([id_poi, comunidad, poi_canonico])
+  @@map("Poi_destacado_ccaa")
 }

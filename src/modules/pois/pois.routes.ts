@@ -347,4 +347,146 @@ export default async function poisRoutes(app: FastifyInstance) {
         .filter((t) => t !== null && t !== ""),
     };
   });
+
+  app.get("/recomendables/base", async (request, reply) => {
+  const query = request.query as {
+    lat?: string;
+    lon?: string;
+    radioKm?: string;
+    limit?: string;
+    visitados?: string;
+  };
+
+  const lat = Number(query.lat);
+  const lon = Number(query.lon);
+  const radioKm = Number(query.radioKm ?? 15);
+  const limit = Math.min(100, Math.max(1, Number(query.limit ?? 30)));
+  const visitados = new Set(
+    (query.visitados ?? "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean)
+  );
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return reply.code(400).send({ message: "lat y lon son obligatorios" });
+  }
+
+  const latDelta = radioKm / 111;
+  const lonDelta = radioKm / (111 * Math.cos((lat * Math.PI) / 180));
+
+  const candidatos = await prisma.poi.findMany({
+    where: {
+      valido: true,
+      latitud: { gte: lat - latDelta, lte: lat + latDelta },
+      longitud: { gte: lon - lonDelta, lte: lon + lonDelta },
+      id_global: {
+        notIn: Array.from(visitados),
+      },
+    },
+    include: {
+      municipio: {
+        include: {
+          provincia: {
+            include: {
+              comunidad: true,
+            },
+          },
+        },
+      },
+      categoria_poi: true,
+      destacados_ccaa: true,
+    },
+  });
+
+  const recomendables = candidatos
+    .filter((poi) => poi.latitud !== null && poi.longitud !== null)
+    .map((poi) => {
+      const distanciaKm = haversineKm(lat, lon, poi.latitud!, poi.longitud!);
+      const esDestacado = poi.destacados_ccaa.length > 0;
+
+      const scoreBase =
+        (esDestacado ? 0.45 : 0) +
+        Math.max(0, 0.35 * (1 - distanciaKm / radioKm)) +
+        (poi.puntuacion ?? 0) * 0.1 +
+        (poi.popularidad ?? 0) * 0.1;
+
+      return {
+        ...poi,
+        distanciaKm,
+        esDestacado,
+        scoreRecomendacion: Number(scoreBase.toFixed(4)),
+      };
+    })
+    .filter((poi) => poi.distanciaKm <= radioKm)
+    .sort((a, b) => b.scoreRecomendacion - a.scoreRecomendacion)
+    .slice(0, limit);
+
+  return recomendables;
+});
+
+
+
+app.post("/generar-google-search", async () => {
+  const pois = await prisma.poi.findMany({
+    include: {
+      municipio: {
+        include: {
+          provincia: {
+            include: {
+              comunidad: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  let actualizados = 0;
+
+  for (const poi of pois) {
+    const query = [
+      poi.nombre,
+      poi.municipio?.nombre,
+      poi.municipio?.provincia?.nombre,
+      poi.municipio?.provincia?.comunidad?.nombre,
+      "España",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+
+    await prisma.poi.update({
+      where: { id_poi: poi.id_poi },
+      data: { google_search_url: url },
+    });
+
+    actualizados++;
+  }
+
+  return {
+    message: "OK",
+    actualizados,
+  };
+});
+
+app.post("/elementos/:id/reemplazar", async (request, reply) => {
+  const { id } = request.params as any;
+  const { id_poi_nuevo } = request.body as any;
+
+  const updated = await prisma.elemento_Itinerario.update({
+    where: { id_elemento_itinerario: Number(id) },
+    data: { id_poi: id_poi_nuevo },
+  });
+
+  return { ok: true, updated };
+});
+
+
+
+
+
+
+
 }

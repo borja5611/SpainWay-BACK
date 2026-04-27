@@ -102,6 +102,7 @@ model Poi {
   valido           Boolean?
   creado           DateTime?
   actualizado      DateTime?
+  google_search_url String? @db.Text
   id_municipio     Int?
   id_categoria_poi Int
   id_global        String                @unique @db.VarChar(150)
@@ -215,9 +216,19 @@ model Itinerario {
   estado        String?          @db.VarChar(50)
   creado        DateTime?
   actualizado   DateTime?
+  base_nombre          String?           @db.VarChar(255)
+  base_direccion       String?           @db.VarChar(400)
+  base_tipo            String?           @db.VarChar(80)
+  base_latitud         Float?
+  base_longitud        Float?
+  base_place_id        String?           @db.VarChar(180)
+  permite_excursiones  Boolean           @default(false)
+  radio_max_km         Float?
   id_usuario    Int
   dias          Dia_Itinerario[]
+  eventos              Itinerario_Evento[]
   usuario       Usuario          @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+
 
   @@map("Itinerario")
 }
@@ -230,6 +241,7 @@ model Dia_Itinerario {
   id_itinerario     Int
   itinerario        Itinerario            @relation(fields: [id_itinerario], references: [id_itinerario], onDelete: Cascade)
   elementos         Elemento_Itinerario[]
+  eventos              Itinerario_Evento[]
 
   @@map("Dia_Itinerario")
 }
@@ -268,4 +280,75 @@ model Poi_destacado_ccaa {
   poi Poi @relation(fields: [id_poi], references: [id_poi], onDelete: Cascade)
 
   @@unique([id_poi, comunidad, poi_canonico])
+}
+
+model Evento_Turistico {
+  id_evento_turistico Int       @id @default(autoincrement())
+  external_id         String    @unique @db.VarChar(180)
+  source              String    @db.VarChar(80)
+
+  nombre              String    @db.VarChar(300)
+  descripcion         String?   @db.VarChar(2000)
+  categoria           String?   @db.VarChar(100)
+  subcategoria        String?   @db.VarChar(150)
+
+  venue_nombre        String?   @db.VarChar(250)
+  direccion           String?   @db.VarChar(400)
+  ciudad              String?   @db.VarChar(120)
+  provincia           String?   @db.VarChar(120)
+  comunidad           String?   @db.VarChar(120)
+
+  latitud             Float?
+  longitud            Float?
+
+  inicio              DateTime
+  fin                 DateTime?
+
+  imagen_url          String?   @db.VarChar(700)
+  url                 String?   @db.VarChar(700)
+
+  precio_min          Float?
+  precio_max          Float?
+  moneda              String?   @db.VarChar(10)
+
+  activo              Boolean   @default(true)
+  metadata_json       Json?
+  google_search_url String?
+
+  creado              DateTime  @default(now())
+  actualizado         DateTime  @updatedAt
+  fetched_at          DateTime  @default(now())
+
+  itinerarios_eventos Itinerario_Evento[]
+
+  @@index([ciudad])
+  @@index([provincia])
+  @@index([comunidad])
+  @@index([inicio])
+  @@index([latitud, longitud])
+  @@map("Evento_Turistico")
+}
+
+model Itinerario_Evento {
+  id_itinerario_evento Int              @id @default(autoincrement())
+  id_itinerario        Int
+  id_dia_itinerario    Int?
+  id_evento_turistico  Int
+
+  orden                Int?
+  inicio_sugerido      DateTime?
+  fin_sugerido         DateTime?
+  score_recomendacion  Float?
+  motivo               String?          @db.VarChar(1000)
+
+  creado               DateTime         @default(now())
+
+  itinerario           Itinerario        @relation(fields: [id_itinerario], references: [id_itinerario], onDelete: Cascade)
+  dia_itinerario       Dia_Itinerario?   @relation(fields: [id_dia_itinerario], references: [id_dia_itinerario], onDelete: Cascade)
+  evento_turistico     Evento_Turistico  @relation(fields: [id_evento_turistico], references: [id_evento_turistico], onDelete: Cascade)
+
+  @@index([id_itinerario])
+  @@index([id_dia_itinerario])
+  @@index([id_evento_turistico])
+  @@map("Itinerario_Evento")
 }

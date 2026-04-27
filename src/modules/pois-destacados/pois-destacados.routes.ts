@@ -5,6 +5,23 @@ function normalizeParam(value: string) {
   return decodeURIComponent(value).trim();
 }
 
+const includePoiCompleto = {
+  poi: {
+    include: {
+      municipio: {
+        include: {
+          provincia: {
+            include: {
+              comunidad: true,
+            },
+          },
+        },
+      },
+      categoria_poi: true,
+    },
+  },
+};
+
 export default async function poisDestacadosRoutes(app: FastifyInstance) {
   app.get("/comunidad/:ccaa", async (request) => {
     const { ccaa } = request.params as { ccaa: string };
@@ -12,11 +29,8 @@ export default async function poisDestacadosRoutes(app: FastifyInstance) {
 
     return prisma.poi_destacado_ccaa.findMany({
       where: { comunidad },
-      orderBy: [
-        { prioridad_fuente: "desc" },
-        { match_confianza: "desc" },
-      ],
-      include: { poi: true },
+      orderBy: [{ prioridad_fuente: "desc" }, { match_confianza: "desc" }],
+      include: includePoiCompleto,
     });
   });
 
@@ -25,17 +39,9 @@ export default async function poisDestacadosRoutes(app: FastifyInstance) {
     const comunidad = normalizeParam(ccaa);
 
     return prisma.poi_destacado_ccaa.findMany({
-      where: {
-        comunidad,
-        prioridad_fuente: {
-          gte: 10,
-        },
-      },
-      orderBy: [
-        { prioridad_fuente: "desc" },
-        { match_confianza: "desc" },
-      ],
-      include: { poi: true },
+      where: { comunidad, prioridad_fuente: { gte: 10 } },
+      orderBy: [{ prioridad_fuente: "desc" }, { match_confianza: "desc" }],
+      include: includePoiCompleto,
     });
   });
 
@@ -44,17 +50,9 @@ export default async function poisDestacadosRoutes(app: FastifyInstance) {
     const comunidad = normalizeParam(ccaa);
 
     return prisma.poi_destacado_ccaa.findMany({
-      where: {
-        comunidad,
-        prioridad_fuente: {
-          lt: 10,
-        },
-      },
-      orderBy: [
-        { prioridad_fuente: "desc" },
-        { match_confianza: "desc" },
-      ],
-      include: { poi: true },
+      where: { comunidad, prioridad_fuente: { lt: 10 } },
+      orderBy: [{ prioridad_fuente: "desc" }, { match_confianza: "desc" }],
+      include: includePoiCompleto,
     });
   });
 
@@ -64,11 +62,8 @@ export default async function poisDestacadosRoutes(app: FastifyInstance) {
 
     return prisma.poi_destacado_ccaa.findMany({
       where: { ciudad_fuente },
-      orderBy: [
-        { prioridad_fuente: "desc" },
-        { match_confianza: "desc" },
-      ],
-      include: { poi: true },
+      orderBy: [{ prioridad_fuente: "desc" }, { match_confianza: "desc" }],
+      include: includePoiCompleto,
     });
   });
 
@@ -78,11 +73,8 @@ export default async function poisDestacadosRoutes(app: FastifyInstance) {
 
     return prisma.poi_destacado_ccaa.findMany({
       where: { provincia_fuente },
-      orderBy: [
-        { prioridad_fuente: "desc" },
-        { match_confianza: "desc" },
-      ],
-      include: { poi: true },
+      orderBy: [{ prioridad_fuente: "desc" }, { match_confianza: "desc" }],
+      include: includePoiCompleto,
     });
   });
 
@@ -90,9 +82,7 @@ export default async function poisDestacadosRoutes(app: FastifyInstance) {
     const { q } = request.query as { q?: string };
 
     if (!q || !q.trim()) {
-      return reply.code(400).send({
-        message: "Debes indicar el parámetro q",
-      });
+      return reply.code(400).send({ message: "Debes indicar el parámetro q" });
     }
 
     const query = q.trim();
@@ -100,45 +90,15 @@ export default async function poisDestacadosRoutes(app: FastifyInstance) {
     return prisma.poi_destacado_ccaa.findMany({
       where: {
         OR: [
-          {
-            poi_canonico: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-          {
-            comunidad: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-          {
-            ciudad_fuente: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-          {
-            provincia_fuente: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-          {
-            poi: {
-              nombre: {
-                contains: query,
-                mode: "insensitive",
-              },
-            },
-          },
+          { poi_canonico: { contains: query, mode: "insensitive" } },
+          { comunidad: { contains: query, mode: "insensitive" } },
+          { ciudad_fuente: { contains: query, mode: "insensitive" } },
+          { provincia_fuente: { contains: query, mode: "insensitive" } },
+          { poi: { nombre: { contains: query, mode: "insensitive" } } },
         ],
       },
-      orderBy: [
-        { prioridad_fuente: "desc" },
-        { match_confianza: "desc" },
-      ],
-      include: { poi: true },
+      orderBy: [{ prioridad_fuente: "desc" }, { match_confianza: "desc" }],
+      include: includePoiCompleto,
       take: 50,
     });
   });

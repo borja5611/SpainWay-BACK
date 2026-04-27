@@ -6,60 +6,84 @@ function toInt(value: unknown): number | null {
   return Number.isInteger(n) ? n : null;
 }
 
-export default async function interaccionesRoutes(app: FastifyInstance) {
-  app.post("/", async (request, reply) => {
-    const body = request.body as {
-      id_usuario: number;
-      id_poi: number;
-      tipo_accion: string;
-      metadata?: string;
-    };
-
-    const usuario = await prisma.usuario.findUnique({
-      where: { id_usuario: body.id_usuario },
-    });
-
-    if (!usuario) {
-      return reply.code(404).send({ message: "Usuario no encontrado" });
-    }
-
-    const poi = await prisma.poi.findUnique({
-      where: { id_poi: body.id_poi },
-    });
-
-    if (!poi) {
-      return reply.code(404).send({ message: "POI no encontrado" });
-    }
-
-    const interaccion = await prisma.item_interaccion.create({
-      data: {
-        id_usuario: body.id_usuario,
-        id_poi: body.id_poi,
-        tipo_accion: body.tipo_accion,
-        metadata: body.metadata,
-        creado: new Date(),
-      },
-    });
-
-    return reply.code(201).send(interaccion);
-  });
-
+export default async function itinerariosRoutes(app: FastifyInstance) {
   app.get("/:id_usuario", async (request, reply) => {
     const { id_usuario } = request.params as { id_usuario: string };
-    const idUsuario = toInt(id_usuario);
+    const usuarioId = toInt(id_usuario);
 
-    if (idUsuario === null) {
+    if (usuarioId === null) {
       return reply.code(400).send({ message: "id_usuario inválido" });
     }
 
-    const interacciones = await prisma.item_interaccion.findMany({
-      where: { id_usuario: idUsuario },
+    const itinerarios = await prisma.itinerario.findMany({
+      where: { id_usuario: usuarioId },
       include: {
-        poi: true,
+        eventos: {
+          include: {
+            evento_turistico: true,
+          },
+        },
+        dias: {
+          orderBy: {
+            fecha: "asc",
+          },
+          include: {
+            eventos: {
+              include: {
+                evento_turistico: true,
+              },
+            },
+            elementos: {
+              orderBy: {
+                orden: "asc",
+              },
+              include: {
+                poi: {
+                  include: {
+                    municipio: true,
+                    categoria_poi: true,
+                    destacados_ccaa: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        creado: "desc",
+      },
+    });
+
+    return itinerarios;
+  });
+
+  app.get("/resumen/:id_usuario", async (request, reply) => {
+    const { id_usuario } = request.params as { id_usuario: string };
+    const usuarioId = toInt(id_usuario);
+
+    if (usuarioId === null) {
+      return reply.code(400).send({ message: "id_usuario inválido" });
+    }
+
+    const itinerarios = await prisma.itinerario.findMany({
+      where: { id_usuario: usuarioId },
+      select: {
+        id_itinerario: true,
+        titulo: true,
+        destino: true,
+        inicio: true,
+        fin: true,
+        presupuesto: true,
+        transporte: true,
+        accesibilidad: true,
+        estado: true,
+        creado: true,
+        actualizado: true,
       },
       orderBy: { creado: "desc" },
     });
 
-    return interacciones;
+    return itinerarios;
   });
 }

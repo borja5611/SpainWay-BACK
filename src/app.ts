@@ -31,8 +31,14 @@ export async function buildApp() {
   });
 
   await app.register(cors, {
-    origin: env.FRONTEND_URL,
+    origin: [
+      env.FRONTEND_URL,
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+    ],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   });
 
   await app.register(jwt, {
@@ -46,11 +52,7 @@ export async function buildApp() {
         description: "API del backend de SpainWay",
         version: "1.0.0",
       },
-      servers: [
-        {
-          url: `http://localhost:${env.PORT}`,
-        },
-      ],
+      servers: [{ url: `http://localhost:${env.PORT}` }],
     },
   });
 

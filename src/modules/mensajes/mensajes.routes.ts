@@ -6,6 +6,14 @@ function toInt(value: unknown): number | null {
   return Number.isInteger(n) ? n : null;
 }
 
+function validarRol(rol: string | undefined | null): string {
+  const limpio = rol?.trim().toLowerCase();
+  if (limpio === "user" || limpio === "usuario") return "user";
+  if (limpio === "assistant" || limpio === "asistente") return "assistant";
+  if (limpio === "system" || limpio === "sistema") return "system";
+  return "user";
+}
+
 export default async function mensajesRoutes(app: FastifyInstance) {
   app.get("/:id_conversacion", async (request, reply) => {
     const { id_conversacion } = request.params as { id_conversacion: string };
@@ -25,13 +33,25 @@ export default async function mensajesRoutes(app: FastifyInstance) {
 
   app.post("/", async (request, reply) => {
     const body = request.body as {
-      id_conversacion: number;
-      rol: string;
-      contenido: string;
+      id_conversacion?: number;
+      rol?: string;
+      contenido?: string;
     };
 
+    const idConversacion = toInt(body.id_conversacion);
+
+    if (idConversacion === null) {
+      return reply.code(400).send({ message: "id_conversacion inválido" });
+    }
+
+    const contenido = body.contenido?.trim();
+
+    if (!contenido) {
+      return reply.code(400).send({ message: "El contenido del mensaje es obligatorio" });
+    }
+
     const conversacion = await prisma.conversacion.findUnique({
-      where: { id_conversacion: body.id_conversacion },
+      where: { id_conversacion: idConversacion },
     });
 
     if (!conversacion) {
@@ -40,9 +60,9 @@ export default async function mensajesRoutes(app: FastifyInstance) {
 
     const mensaje = await prisma.mensaje.create({
       data: {
-        id_conversacion: body.id_conversacion,
-        rol: body.rol,
-        contenido: body.contenido,
+        id_conversacion: idConversacion,
+        rol: validarRol(body.rol),
+        contenido,
         creado: new Date(),
       },
     });

@@ -6,6 +6,25 @@ function toInt(value: unknown): number | null {
   return Number.isInteger(n) ? n : null;
 }
 
+async function buscarItinerarioRelacionado(idUsuario: number, titulo?: string | null) {
+  if (!titulo) return null;
+
+  const itinerario = await prisma.itinerario.findFirst({
+    where: {
+      id_usuario: idUsuario,
+      titulo,
+    },
+    orderBy: {
+      creado: "desc",
+    },
+    select: {
+      id_itinerario: true,
+    },
+  });
+
+  return itinerario?.id_itinerario ?? null;
+}
+
 export default async function conversacionesRoutes(app: FastifyInstance) {
   app.get("/:id_usuario", async (request, reply) => {
     const { id_usuario } = request.params as { id_usuario: string };
@@ -26,13 +45,23 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
       },
     });
 
-    return conversaciones.map((conversacion) => ({
-      id_conversacion: conversacion.id_conversacion,
-      titulo: conversacion.titulo,
-      creado: conversacion.creado,
-      id_usuario: conversacion.id_usuario,
-      ultimo_mensaje: conversacion.mensajes[0]?.contenido ?? null,
-    }));
+    return Promise.all(
+      conversaciones.map(async (conversacion) => {
+        const idItinerarioRelacionado = await buscarItinerarioRelacionado(
+          conversacion.id_usuario,
+          conversacion.titulo
+        );
+
+        return {
+          id_conversacion: conversacion.id_conversacion,
+          titulo: conversacion.titulo,
+          creado: conversacion.creado,
+          id_usuario: conversacion.id_usuario,
+          ultimo_mensaje: conversacion.mensajes[0]?.contenido ?? null,
+          id_itinerario_relacionado: idItinerarioRelacionado,
+        };
+      })
+    );
   });
 
   app.get("/detalle/:id_conversacion", async (request, reply) => {
@@ -56,19 +85,25 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ message: "Conversación no encontrada" });
     }
 
-    return conversacion;
+    const idItinerarioRelacionado = await buscarItinerarioRelacionado(
+      conversacion.id_usuario,
+      conversacion.titulo
+    );
+
+    return {
+      ...conversacion,
+      id_itinerario_relacionado: idItinerarioRelacionado,
+    };
   });
 
   app.post("/", async (request, reply) => {
-    const body = request.body as { id_usuario?: number; titulo?: string };
-    const idUsuario = toInt(body.id_usuario);
-
-    if (idUsuario === null) {
-      return reply.code(400).send({ message: "id_usuario inválido" });
-    }
+    const body = request.body as {
+      id_usuario: number;
+      titulo?: string;
+    };
 
     const usuario = await prisma.usuario.findUnique({
-      where: { id_usuario: idUsuario },
+      where: { id_usuario: body.id_usuario },
     });
 
     if (!usuario) {
@@ -77,22 +112,16 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
 
     const conversacion = await prisma.conversacion.create({
       data: {
-        id_usuario: idUsuario,
-        titulo: body.titulo?.trim() || "Nuevo viaje con SpainWay",
+        id_usuario: body.id_usuario,
+        titulo: body.titulo ?? "Nueva conversación",
         creado: new Date(),
       },
     });
 
-    await prisma.mensaje.create({
-      data: {
-        id_conversacion: conversacion.id_conversacion,
-        rol: "assistant",
-        contenido: "Hola, soy SpainWay. Cuéntame el destino, la zona base, los días y tus preferencias para ayudarte a preparar el viaje.",
-        creado: new Date(),
-      },
+    return reply.code(201).send({
+      ...conversacion,
+      id_itinerario_relacionado: null,
     });
-
-    return reply.code(201).send(conversacion);
   });
 
   app.delete("/:id_conversacion", async (request, reply) => {
@@ -111,11 +140,13 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ message: "Conversación no encontrada" });
     }
 
-    await prisma.$transaction([
-      prisma.mensaje.deleteMany({ where: { id_conversacion: idConversacion } }),
-      prisma.conversacion.delete({ where: { id_conversacion: idConversacion } }),
-    ]);
+    await prisma.conversacion.delete({
+      where: { id_conversacion: idConversacion },
+    });
 
-    return { ok: true, message: "Conversación eliminada correctamente" };
+    return {
+      ok: true,
+      message: "Conversación eliminada correctamente",
+    };
   });
 }

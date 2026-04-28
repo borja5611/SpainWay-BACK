@@ -196,7 +196,7 @@ model Conversacion {
 model Mensaje {
   id_mensaje      Int          @id @default(autoincrement())
   rol             String?      @db.VarChar(50)
-  contenido       String?      @db.VarChar(2000)
+  contenido       String?      @db.Text
   creado          DateTime?
   id_conversacion Int
   conversacion    Conversacion @relation(fields: [id_conversacion], references: [id_conversacion], onDelete: Cascade)
@@ -224,6 +224,9 @@ model Itinerario {
   base_place_id        String?           @db.VarChar(180)
   permite_excursiones  Boolean           @default(false)
   radio_max_km         Float?
+  ia_json              Json?
+  ia_resumen           String?          @db.Text
+  preferencias_json    Json?
   id_usuario    Int
   dias          Dia_Itinerario[]
   eventos              Itinerario_Evento[]

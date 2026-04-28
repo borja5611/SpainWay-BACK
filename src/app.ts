@@ -24,6 +24,7 @@ import eventosRoutes from "./modules/eventos/eventos.routes";
 import programacionPoiRoutes from "./modules/programacion-poi/programacion-poi.routes";
 import authRoutes from "./modules/auth/auth.routes";
 import poisDestacadosRoutes from "./modules/pois-destacados/pois-destacados.routes";
+import recomendadorRoutes from "./modules/recomendador/recomendador.routes";
 
 export async function buildApp() {
   const app = Fastify({
@@ -78,6 +79,7 @@ export async function buildApp() {
   await app.register(programacionPoiRoutes, { prefix: "/api/programacion-poi" });
   await app.register(authRoutes, { prefix: "/api/auth" });
   await app.register(poisDestacadosRoutes, { prefix: "/api/pois-destacados" });
+  await app.register(recomendadorRoutes, { prefix: "/api/recomendador" });
 
   return app;
 }

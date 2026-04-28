@@ -28,6 +28,16 @@ const includeItinerarioCompleto = {
           },
         },
       },
+      eventos: {
+        include: {
+          evento_turistico: true,
+        },
+      },
+    },
+  },
+  eventos: {
+    include: {
+      evento_turistico: true,
     },
   },
 };
@@ -56,6 +66,25 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
         creado: true,
         actualizado: true,
         id_usuario: true,
+        base_nombre: true,
+        base_direccion: true,
+        base_latitud: true,
+        base_longitud: true,
+        permite_excursiones: true,
+        radio_max_km: true,
+        ia_resumen: true,
+        ia_json: true,
+        preferencias_json: true,
+        dias: {
+          select: {
+            id_dia_itinerario: true,
+            elementos: {
+              select: {
+                id_elemento_itinerario: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { creado: "desc" },
     });

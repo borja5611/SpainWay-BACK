@@ -229,6 +229,7 @@ model Itinerario {
   preferencias_json    Json?
   id_usuario    Int
   dias          Dia_Itinerario[]
+  restauracion_selecciones ItinerarioRestauracion[]
   eventos              Itinerario_Evento[]
   usuario       Usuario          @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
 
@@ -245,6 +246,7 @@ model Dia_Itinerario {
   itinerario        Itinerario            @relation(fields: [id_itinerario], references: [id_itinerario], onDelete: Cascade)
   elementos         Elemento_Itinerario[]
   eventos              Itinerario_Evento[]
+  restauracion_selecciones ItinerarioRestauracion[]
 
   @@map("Dia_Itinerario")
 }
@@ -354,4 +356,44 @@ model Itinerario_Evento {
   @@index([id_dia_itinerario])
   @@index([id_evento_turistico])
   @@map("Itinerario_Evento")
+}
+
+model LugarRestauracion {
+  id_lugar_restauracion Int      @id @default(autoincrement())
+  proveedor             String   @db.VarChar(50)
+  externalId            String   @db.VarChar(180)
+  nombre                String   @db.VarChar(300)
+  categoria             String?  @db.VarChar(150)
+  direccion             String?  @db.VarChar(500)
+  latitud               Float
+  longitud              Float
+  distancia             Int?
+  rating                Float?
+  precio                String?  @db.VarChar(50)
+  url                   String?  @db.VarChar(800)
+  telefono              String?  @db.VarChar(80)
+  creadoEn              DateTime @default(now())
+  actualizadoEn         DateTime @updatedAt
+
+  selecciones ItinerarioRestauracion[]
+
+  @@unique([proveedor, externalId])
+  @@map("LugarRestauracion")
+}
+
+model ItinerarioRestauracion {
+  id_itinerario_restauracion Int      @id @default(autoincrement())
+  id_itinerario              Int
+  id_dia_itinerario          Int
+  momento                    String   @db.VarChar(40)
+  id_lugar_restauracion      Int
+  id_poi_referencia          Int?
+  creadoEn                   DateTime @default(now())
+
+  itinerario Itinerario         @relation(fields: [id_itinerario], references: [id_itinerario], onDelete: Cascade)
+  dia        Dia_Itinerario     @relation(fields: [id_dia_itinerario], references: [id_dia_itinerario], onDelete: Cascade)
+  lugar      LugarRestauracion  @relation(fields: [id_lugar_restauracion], references: [id_lugar_restauracion])
+
+  @@unique([id_itinerario, id_dia_itinerario, momento])
+  @@map("ItinerarioRestauracion")
 }

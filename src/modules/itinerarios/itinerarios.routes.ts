@@ -210,15 +210,27 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
     return itinerario;
   });
 
-  app.delete("/:id_itinerario", async (request, reply) => {
-    const { id_itinerario } = request.params as { id_itinerario: string };
-    const itinerarioId = toInt(id_itinerario);
+app.delete("/:idItinerario", async (request, reply) => {
+  const params = request.params as { idItinerario?: string };
+  const idItinerario = Number(params.idItinerario);
 
-    if (itinerarioId === null) {
-      return reply.code(400).send({ message: "id_itinerario inválido" });
-    }
+  if (!Number.isInteger(idItinerario) || idItinerario <= 0) {
+    return reply.code(400).send({ message: "idItinerario inválido" });
+  }
 
-    await prisma.itinerario.delete({ where: { id_itinerario: itinerarioId } });
-    return { ok: true, message: "Itinerario eliminado correctamente" };
+  const existente = await prisma.itinerario.findUnique({
+    where: { id_itinerario: idItinerario },
+    select: { id_itinerario: true },
   });
+
+  if (!existente) {
+    return reply.code(404).send({ message: "Itinerario no encontrado" });
+  }
+
+  await prisma.itinerario.delete({
+    where: { id_itinerario: idItinerario },
+  });
+
+  return reply.send({ ok: true });
+});
 }

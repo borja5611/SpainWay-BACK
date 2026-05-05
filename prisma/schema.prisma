@@ -185,10 +185,13 @@ model Analisis_Evento {
 model Conversacion {
   id_conversacion Int       @id @default(autoincrement())
   titulo          String?   @db.VarChar(200)
+  id_itinerario   Int?
   creado          DateTime?
   id_usuario      Int
+  itinerario      Itinerario? @relation(fields: [id_itinerario], references: [id_itinerario], onDelete: Cascade)
   usuario         Usuario   @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
   mensajes        Mensaje[]
+  
 
   @@map("Conversacion")
 }
@@ -229,6 +232,7 @@ model Itinerario {
   preferencias_json    Json?
   id_usuario    Int
   dias          Dia_Itinerario[]
+  conversaciones Conversacion[]
   restauracion_selecciones ItinerarioRestauracion[]
   eventos              Itinerario_Evento[]
   usuario       Usuario          @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)

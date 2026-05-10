@@ -6,6 +6,50 @@ function toInt(value: unknown): number | null {
   return Number.isInteger(num) ? num : null;
 }
 
+
+function normalizarTexto(value?: string | null): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getDestinoPoiWhere(destino?: string | null): any {
+  const d = normalizarTexto(destino);
+  if (!d) return {};
+
+  if (d.includes("madrid")) {
+    return {
+      OR: [
+        { direccion: { contains: "Madrid", mode: "insensitive" as const } },
+        { municipio: { nombre: { contains: "Madrid", mode: "insensitive" as const } } },
+        { municipio: { provincia: { comunidad: { nombre: { contains: "Madrid", mode: "insensitive" as const } } } } },
+      ],
+    };
+  }
+
+  const comunidades: Array<{ keys: string[]; comunidad: string }> = [
+    { keys: ["andalucia", "malaga", "sevilla", "granada", "cordoba", "cadiz", "huelva", "jaen", "almeria"], comunidad: "Andalucía" },
+    { keys: ["asturias", "oviedo", "gijon"], comunidad: "Asturias" },
+    { keys: ["baleares", "mallorca", "menorca", "ibiza", "formentera"], comunidad: "Baleares" },
+    { keys: ["canarias", "tenerife", "gran canaria", "lanzarote", "fuerteventura", "la palma"], comunidad: "Canarias" },
+    { keys: ["cantabria", "santander"], comunidad: "Cantabria" },
+    { keys: ["cataluna", "catalunya", "barcelona", "girona", "tarragona", "lleida"], comunidad: "Cataluña" },
+    { keys: ["comunidad valenciana", "valencia", "alicante", "castellon"], comunidad: "Valenciana" },
+  ];
+
+  const match = comunidades.find((item) => item.keys.some((key) => d.includes(key)));
+  if (!match) return {};
+
+  return {
+    OR: [
+      { municipio: { provincia: { comunidad: { nombre: { contains: match.comunidad, mode: "insensitive" as const } } } } },
+      { direccion: { contains: match.comunidad, mode: "insensitive" as const } },
+    ],
+  };
+}
+
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const R = 6371;
@@ -82,22 +126,33 @@ export default async function poisRoutes(app: FastifyInstance) {
   });
 
   app.get("/busqueda/texto", async (request) => {
-    const { q } = request.query as { q?: string };
+    const { q, destino } = request.query as { q?: string; destino?: string };
 
     if (!q || !q.trim()) {
       return [];
     }
 
+    const destinoWhere = getDestinoPoiWhere(destino);
+
     const pois = await prisma.poi.findMany({
       where: {
-        OR: [
-          { nombre: { contains: q, mode: "insensitive" } },
-          { descripcion: { contains: q, mode: "insensitive" } },
-          { direccion: { contains: q, mode: "insensitive" } },
+        valido: { not: false },
+        AND: [
+          destinoWhere,
+          {
+            OR: [
+              { nombre: { contains: q, mode: "insensitive" } },
+              { descripcion: { contains: q, mode: "insensitive" } },
+              { direccion: { contains: q, mode: "insensitive" } },
+              { tipo: { contains: q, mode: "insensitive" } },
+              { subcategoria: { contains: q, mode: "insensitive" } },
+              { categoria_poi: { nombre: { contains: q, mode: "insensitive" } } },
+            ],
+          },
         ],
       },
       include: {
-        municipio: true,
+        municipio: { include: { provincia: { include: { comunidad: true } } } },
         categoria_poi: true,
       },
       take: 50,

@@ -1,5 +1,11 @@
 import { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
+import {
+  applyManualItineraryAction,
+  regeneratePartialDay,
+  resumenDiaActualizado,
+  type ManualItineraryAction,
+} from "./itinerario-edicion.service";
 
 function toInt(value: unknown): number | null {
   const n = Number(value);
@@ -208,6 +214,63 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
     });
 
     return itinerario;
+  });
+
+
+  app.post("/:id_itinerario/acciones/manual", async (request, reply) => {
+    const { id_itinerario } = request.params as { id_itinerario: string };
+    const itinerarioId = toInt(id_itinerario);
+
+    if (itinerarioId === null) {
+      return reply.code(400).send({ message: "id_itinerario inválido" });
+    }
+
+    const body = request.body as ManualItineraryAction;
+
+    try {
+      const resultado = await applyManualItineraryAction(itinerarioId, body);
+      return reply.send({ ok: true, resultado });
+    } catch (error) {
+      return reply.code(400).send({
+        ok: false,
+        message: error instanceof Error ? error.message : "No se pudo modificar el itinerario",
+      });
+    }
+  });
+
+  app.post("/:id_itinerario/regenerar-dia", async (request, reply) => {
+    const { id_itinerario } = request.params as { id_itinerario: string };
+    const itinerarioId = toInt(id_itinerario);
+
+    if (itinerarioId === null) {
+      return reply.code(400).send({ message: "id_itinerario inválido" });
+    }
+
+    const body = request.body as { dayNumber?: number; mensaje?: string; message?: string };
+    const dayNumber = toInt(body.dayNumber);
+
+    if (dayNumber === null || dayNumber <= 0) {
+      return reply.code(400).send({ message: "dayNumber inválido" });
+    }
+
+    try {
+      const itinerario = await regeneratePartialDay(
+        itinerarioId,
+        dayNumber,
+        body.mensaje ?? body.message ?? "Regeneración parcial desde frontend",
+      );
+
+      return reply.send({
+        ok: true,
+        itinerario,
+        resumen: resumenDiaActualizado(itinerario, dayNumber),
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        ok: false,
+        message: error instanceof Error ? error.message : "No se pudo regenerar el día",
+      });
+    }
   });
 
 app.delete("/:idItinerario", async (request, reply) => {

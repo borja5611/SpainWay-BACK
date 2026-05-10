@@ -47,20 +47,20 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
 
     return Promise.all(
       conversaciones.map(async (conversacion) => {
-        const idItinerarioRelacionado = await buscarItinerarioRelacionado(
-          conversacion.id_usuario,
-          conversacion.titulo
-        );
+        const idItinerarioRelacionado =
+          conversacion.id_itinerario ??
+          (await buscarItinerarioRelacionado(conversacion.id_usuario, conversacion.titulo));
 
         return {
           id_conversacion: conversacion.id_conversacion,
           titulo: conversacion.titulo,
           creado: conversacion.creado,
           id_usuario: conversacion.id_usuario,
+          id_itinerario: conversacion.id_itinerario,
           ultimo_mensaje: conversacion.mensajes[0]?.contenido ?? null,
           id_itinerario_relacionado: idItinerarioRelacionado,
         };
-      })
+      }),
     );
   });
 
@@ -85,10 +85,9 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ message: "Conversación no encontrada" });
     }
 
-    const idItinerarioRelacionado = await buscarItinerarioRelacionado(
-      conversacion.id_usuario,
-      conversacion.titulo
-    );
+    const idItinerarioRelacionado =
+      conversacion.id_itinerario ??
+      (await buscarItinerarioRelacionado(conversacion.id_usuario, conversacion.titulo));
 
     return {
       ...conversacion,
@@ -100,6 +99,7 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
     const body = request.body as {
       id_usuario: number;
       titulo?: string;
+      id_itinerario?: number | null;
     };
 
     const usuario = await prisma.usuario.findUnique({
@@ -110,9 +110,16 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ message: "Usuario no encontrado" });
     }
 
+    const idItinerario = body.id_itinerario ? toInt(body.id_itinerario) : null;
+
+    if (body.id_itinerario && idItinerario === null) {
+      return reply.code(400).send({ message: "id_itinerario inválido" });
+    }
+
     const conversacion = await prisma.conversacion.create({
       data: {
         id_usuario: body.id_usuario,
+        id_itinerario: idItinerario ?? undefined,
         titulo: body.titulo ?? "Nueva conversación",
         creado: new Date(),
       },
@@ -120,7 +127,7 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
 
     return reply.code(201).send({
       ...conversacion,
-      id_itinerario_relacionado: null,
+      id_itinerario_relacionado: conversacion.id_itinerario,
     });
   });
 

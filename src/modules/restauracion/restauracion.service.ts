@@ -7,7 +7,7 @@ export async function buscarRestaurantes({
   lat,
   lng,
   radio = 1000,
-  categoria = "13065", // restaurante
+  categoria = "13065",
 }: {
   lat: number;
   lng: number;
@@ -26,28 +26,39 @@ export async function buscarRestaurantes({
     },
   });
 
-  const lugares = response.data.results;
-
+  const lugares = response.data.results ?? [];
   const guardados = [];
 
   for (const l of lugares) {
-    const saved = await prisma.lugaRestauracion.upsert({
+    const latitud = l.geocodes?.main?.latitude;
+    const longitud = l.geocodes?.main?.longitude;
+
+    if (!l.fsq_id || latitud == null || longitud == null) continue;
+
+    const saved = await prisma.lugarRestauracion.upsert({
       where: {
         proveedor_externalId: {
           proveedor: "foursquare",
           externalId: l.fsq_id,
         },
       },
-      update: {},
+      update: {
+        nombre: l.name,
+        categoria: l.categories?.[0]?.name || null,
+        direccion: l.location?.formatted_address || null,
+        latitud,
+        longitud,
+        distancia: l.distance ?? null,
+      },
       create: {
         proveedor: "foursquare",
         externalId: l.fsq_id,
         nombre: l.name,
         categoria: l.categories?.[0]?.name || null,
         direccion: l.location?.formatted_address || null,
-        latitud: l.geocodes.main.latitude,
-        longitud: l.geocodes.main.longitude,
-        distancia: l.distance,
+        latitud,
+        longitud,
+        distancia: l.distance ?? null,
       },
     });
 

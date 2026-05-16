@@ -45,9 +45,9 @@ export async function buildApp() {
     allowedHeaders: ["Content-Type", "Authorization"],
   });
 
-  await app.register(jwt, {
-    secret: "spainway-secret-dev",
-  });
+await app.register(jwt, {
+  secret: process.env.JWT_SECRET || "spainway-secret-dev",
+});
 
   await app.register(swagger, {
     openapi: {

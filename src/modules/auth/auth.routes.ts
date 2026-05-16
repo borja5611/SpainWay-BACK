@@ -1,37 +1,47 @@
 import { FastifyInstance } from "fastify";
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "../../lib/prisma";
+import { enviarCorreoRecuperacionPassword } from "../../servicios/emailServicio";
 
 const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 
 
-type PasswordResetState = {
-  email: string;
-  codeHash: string;
-  attempts: number;
-  expiresAt: number;
-  verified: boolean;
-};
+const RESET_TOKEN_TTL_SECONDS = 15 * 60;
 
-const passwordResetRequests = new Map<string, PasswordResetState>();
-const RESET_CODE_TTL_MS = 10 * 60 * 1000;
-const RESET_TOKEN_TTL_MS = 15 * 60;
-
-function generarCodigoReset() {
+function generarCodigoReset(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-function limpiarResetExpirados() {
-  const now = Date.now();
-  for (const [email, state] of passwordResetRequests.entries()) {
-    if (state.expiresAt < now) passwordResetRequests.delete(email);
-  }
+function normalizarEmail(value?: string | null): string {
+  return (value ?? "").trim().toLowerCase();
 }
 
-function normalizarEmail(value?: string | null) {
-  return (value ?? "").trim().toLowerCase();
+function hashCodigoReset(email: string, codigo: string): string {
+  const secret = process.env.PASSWORD_RESET_SECRET ?? "spainway_reset_secret_dev";
+
+  return crypto
+    .createHash("sha256")
+    .update(`${email}:${codigo}:${secret}`)
+    .digest("hex");
+}
+
+function getResetExpirationDate(): Date {
+  const minutos = Number(process.env.PASSWORD_RESET_MINUTES ?? 10);
+  const expiresAt = new Date();
+  expiresAt.setMinutes(expiresAt.getMinutes() + minutos);
+  return expiresAt;
+}
+
+function respuestaRecuperacionGenerica(email?: string) {
+  return {
+    ok: true,
+    email,
+    message:
+      "Si el correo está registrado en SpainWay, recibirás un código para recuperar tu contraseña.",
+  };
 }
 
 function getGoogleConfig() {
@@ -205,33 +215,57 @@ export default async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "Introduce el correo de tu cuenta" });
     }
 
-    const usuario = await prisma.usuario.findUnique({ where: { email } });
-
-    if (!usuario) {
-      return reply.code(404).send({ message: "No existe ninguna cuenta asociada a ese correo" });
-    }
-
-    limpiarResetExpirados();
-
-    const code = generarCodigoReset();
-    const codeHash = await bcrypt.hash(code, 10);
-
-    passwordResetRequests.set(email, {
-      email,
-      codeHash,
-      attempts: 0,
-      expiresAt: Date.now() + RESET_CODE_TTL_MS,
-      verified: false,
+    const usuario = await prisma.usuario.findUnique({
+      where: { email },
+      select: {
+        id_usuario: true,
+        nombre: true,
+        email: true,
+      },
     });
 
-    const exposeCode = process.env.RESET_PASSWORD_EXPOSE_CODE !== "false";
+    // Respuesta genérica para no revelar si un correo existe o no.
+    if (!usuario) {
+      return respuestaRecuperacionGenerica(email);
+    }
+
+    const code = generarCodigoReset();
+    const tokenHash = hashCodigoReset(email, code);
+
+    await prisma.passwordResetToken.deleteMany({
+      where: {
+        id_usuario: usuario.id_usuario,
+        used_at: null,
+      },
+    });
+
+    await prisma.passwordResetToken.create({
+      data: {
+        id_usuario: usuario.id_usuario,
+        token_hash: tokenHash,
+        expires_at: getResetExpirationDate(),
+      },
+    });
+
+    try {
+      await enviarCorreoRecuperacionPassword({
+        to: usuario.email,
+        codigo: code,
+        nombre: usuario.nombre,
+      });
+    } catch (error) {
+      request.log.error(error);
+
+      return reply.code(500).send({
+        message:
+          "No hemos podido enviar el código ahora mismo. Espera unos minutos y vuelve a intentarlo.",
+      });
+    }
+
+    const exposeCode = process.env.RESET_PASSWORD_EXPOSE_CODE === "true";
 
     return {
-      ok: true,
-      email,
-      message: exposeCode
-        ? "Código generado correctamente. En esta versión de pruebas se muestra en pantalla porque el envío de email todavía no está conectado."
-        : "Si el correo existe, recibirás un código para recuperar la contraseña.",
+      ...respuestaRecuperacionGenerica(email),
       ...(exposeCode ? { devCode: code } : {}),
     };
   });
@@ -239,42 +273,51 @@ export default async function authRoutes(app: FastifyInstance) {
   app.post("/password/verify", async (request, reply) => {
     const body = request.body as { email?: string; code?: string };
     const email = normalizarEmail(body.email);
-    const code = (body.code ?? "").trim();
+    const code = String(body.code ?? "").trim();
 
     if (!email || !/^\d{6}$/.test(code)) {
-      return reply.code(400).send({ message: "Código de recuperación no válido" });
+      return reply.code(400).send({ message: "Introduce el correo y el código de 6 dígitos." });
     }
 
-    limpiarResetExpirados();
+    const usuario = await prisma.usuario.findUnique({
+      where: { email },
+      select: {
+        id_usuario: true,
+      },
+    });
 
-    const state = passwordResetRequests.get(email);
-
-    if (!state) {
-      return reply.code(400).send({ message: "El código ha caducado. Solicita uno nuevo." });
+    if (!usuario) {
+      return reply.code(400).send({ message: "El código no es válido o ha caducado." });
     }
 
-    if (state.attempts >= 5) {
-      passwordResetRequests.delete(email);
-      return reply.code(429).send({ message: "Demasiados intentos. Solicita un código nuevo." });
+    const tokenHash = hashCodigoReset(email, code);
+
+    const resetRecord = await prisma.passwordResetToken.findFirst({
+      where: {
+        id_usuario: usuario.id_usuario,
+        token_hash: tokenHash,
+        used_at: null,
+        expires_at: {
+          gt: new Date(),
+        },
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+    });
+
+    if (!resetRecord) {
+      return reply.code(400).send({ message: "El código no es válido o ha caducado." });
     }
-
-    const ok = await bcrypt.compare(code, state.codeHash);
-
-    if (!ok) {
-      state.attempts += 1;
-      passwordResetRequests.set(email, state);
-      return reply.code(400).send({ message: "El código introducido no es correcto" });
-    }
-
-    state.verified = true;
-    passwordResetRequests.set(email, state);
 
     const resetToken = app.jwt.sign(
       {
         tipo: "password_reset",
         email,
+        id_usuario: usuario.id_usuario,
+        id_reset_token: resetRecord.id_reset_token,
       },
-      { expiresIn: RESET_TOKEN_TTL_MS }
+      { expiresIn: RESET_TOKEN_TTL_SECONDS }
     );
 
     return {
@@ -285,48 +328,78 @@ export default async function authRoutes(app: FastifyInstance) {
 
   app.post("/password/reset", async (request, reply) => {
     const body = request.body as { resetToken?: string; password?: string };
+    const resetToken = String(body.resetToken ?? "").trim();
+    const password = String(body.password ?? "");
 
-    if (!body.resetToken?.trim() || !body.password?.trim()) {
-      return reply.code(400).send({ message: "Faltan datos para actualizar la contraseña" });
+    if (!resetToken || !password) {
+      return reply.code(400).send({ message: "Faltan datos para actualizar la contraseña." });
     }
 
-    if (body.password.length < 6) {
-      return reply.code(400).send({ message: "La contraseña debe tener al menos 6 caracteres" });
+    if (password.length < 6) {
+      return reply.code(400).send({ message: "La contraseña debe tener al menos 6 caracteres." });
     }
 
     try {
-      const payload = app.jwt.verify(body.resetToken) as { tipo?: string; email?: string };
+      const payload = app.jwt.verify(resetToken) as {
+        tipo?: string;
+        email?: string;
+        id_usuario?: number;
+        id_reset_token?: number;
+      };
 
-      if (payload.tipo !== "password_reset" || !payload.email) {
-        return reply.code(401).send({ message: "La recuperación no es válida" });
+      if (
+        payload.tipo !== "password_reset" ||
+        !payload.email ||
+        !payload.id_usuario ||
+        !payload.id_reset_token
+      ) {
+        return reply.code(401).send({ message: "La recuperación no es válida o ha caducado." });
       }
 
-      const email = normalizarEmail(payload.email);
-      const state = passwordResetRequests.get(email);
-
-      if (!state?.verified || state.expiresAt < Date.now()) {
-        passwordResetRequests.delete(email);
-        return reply.code(401).send({ message: "La recuperación ha caducado. Solicita un código nuevo." });
-      }
-
-      const passwordHash = await bcrypt.hash(body.password, 10);
-
-      await prisma.usuario.update({
-        where: { email },
-        data: {
-          contrasena: passwordHash,
-          actualizado: new Date(),
+      const resetRecord = await prisma.passwordResetToken.findFirst({
+        where: {
+          id_reset_token: payload.id_reset_token,
+          id_usuario: payload.id_usuario,
+          used_at: null,
+          expires_at: {
+            gt: new Date(),
+          },
         },
       });
 
-      passwordResetRequests.delete(email);
+      if (!resetRecord) {
+        return reply.code(401).send({ message: "La recuperación no es válida o ha caducado." });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      await prisma.$transaction([
+        prisma.usuario.update({
+          where: {
+            id_usuario: payload.id_usuario,
+          },
+          data: {
+            contrasena: passwordHash,
+            actualizado: new Date(),
+          },
+        }),
+        prisma.passwordResetToken.update({
+          where: {
+            id_reset_token: resetRecord.id_reset_token,
+          },
+          data: {
+            used_at: new Date(),
+          },
+        }),
+      ]);
 
       return {
         ok: true,
-        message: "Contraseña actualizada correctamente",
+        message: "Contraseña actualizada correctamente.",
       };
-    } catch {
-      return reply.code(401).send({ message: "La recuperación no es válida o ha caducado" });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(401).send({ message: "La recuperación no es válida o ha caducado." });
     }
   });
 

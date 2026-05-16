@@ -64,12 +64,12 @@ export async function passwordResetRoutes(app: FastifyInstance) {
 
     const usuario = await prisma.usuario.findUnique({
       where: {
-        correo: email,
+        email,
       },
       select: {
         id_usuario: true,
         nombre: true,
-        correo: true,
+        email: true,
       },
     });
 
@@ -94,7 +94,7 @@ export async function passwordResetRoutes(app: FastifyInstance) {
 
     try {
       await enviarCorreoRecuperacionPassword({
-        to: usuario.correo,
+        to: usuario.email,
         codigo,
         nombre: usuario.nombre,
       });
@@ -124,7 +124,7 @@ export async function passwordResetRoutes(app: FastifyInstance) {
 
     const usuario = await prisma.usuario.findUnique({
       where: {
-        correo: email,
+        email,
       },
       select: {
         id_usuario: true,
@@ -188,7 +188,7 @@ export async function passwordResetRoutes(app: FastifyInstance) {
 
     const usuario = await prisma.usuario.findUnique({
       where: {
-        correo: email,
+        email,
       },
       select: {
         id_usuario: true,

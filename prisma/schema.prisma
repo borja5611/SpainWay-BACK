@@ -22,7 +22,9 @@ model Usuario {
   favoritos      Favoritos[]
   interacciones  Item_interaccion[]
   itinerarios    Itinerario[]
+  password_reset_tokens PasswordResetToken[]
   pref_usuario   Pref_usuario?
+  
 
   @@map("Usuario")
 }
@@ -400,4 +402,18 @@ model ItinerarioRestauracion {
 
   @@unique([id_itinerario, id_dia_itinerario, momento])
   @@map("ItinerarioRestauracion")
+}
+
+model PasswordResetToken {
+  id_reset_token Int       @id @default(autoincrement())
+  id_usuario     Int
+  token_hash     String
+  expires_at     DateTime
+  used_at        DateTime?
+  created_at     DateTime  @default(now())
+
+  usuario Usuario @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+
+  @@index([id_usuario])
+  @@index([expires_at])
 }

@@ -6,6 +6,34 @@ const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 
+
+type PasswordResetState = {
+  email: string;
+  codeHash: string;
+  attempts: number;
+  expiresAt: number;
+  verified: boolean;
+};
+
+const passwordResetRequests = new Map<string, PasswordResetState>();
+const RESET_CODE_TTL_MS = 10 * 60 * 1000;
+const RESET_TOKEN_TTL_MS = 15 * 60;
+
+function generarCodigoReset() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function limpiarResetExpirados() {
+  const now = Date.now();
+  for (const [email, state] of passwordResetRequests.entries()) {
+    if (state.expiresAt < now) passwordResetRequests.delete(email);
+  }
+}
+
+function normalizarEmail(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
+}
+
 function getGoogleConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -166,6 +194,140 @@ export default async function authRoutes(app: FastifyInstance) {
         rol: usuario.rol,
       },
     };
+  });
+
+
+  app.post("/password/forgot", async (request, reply) => {
+    const body = request.body as { email?: string };
+    const email = normalizarEmail(body.email);
+
+    if (!email) {
+      return reply.code(400).send({ message: "Introduce el correo de tu cuenta" });
+    }
+
+    const usuario = await prisma.usuario.findUnique({ where: { email } });
+
+    if (!usuario) {
+      return reply.code(404).send({ message: "No existe ninguna cuenta asociada a ese correo" });
+    }
+
+    limpiarResetExpirados();
+
+    const code = generarCodigoReset();
+    const codeHash = await bcrypt.hash(code, 10);
+
+    passwordResetRequests.set(email, {
+      email,
+      codeHash,
+      attempts: 0,
+      expiresAt: Date.now() + RESET_CODE_TTL_MS,
+      verified: false,
+    });
+
+    const exposeCode = process.env.RESET_PASSWORD_EXPOSE_CODE !== "false";
+
+    return {
+      ok: true,
+      email,
+      message: exposeCode
+        ? "Código generado correctamente. En esta versión de pruebas se muestra en pantalla porque el envío de email todavía no está conectado."
+        : "Si el correo existe, recibirás un código para recuperar la contraseña.",
+      ...(exposeCode ? { devCode: code } : {}),
+    };
+  });
+
+  app.post("/password/verify", async (request, reply) => {
+    const body = request.body as { email?: string; code?: string };
+    const email = normalizarEmail(body.email);
+    const code = (body.code ?? "").trim();
+
+    if (!email || !/^\d{6}$/.test(code)) {
+      return reply.code(400).send({ message: "Código de recuperación no válido" });
+    }
+
+    limpiarResetExpirados();
+
+    const state = passwordResetRequests.get(email);
+
+    if (!state) {
+      return reply.code(400).send({ message: "El código ha caducado. Solicita uno nuevo." });
+    }
+
+    if (state.attempts >= 5) {
+      passwordResetRequests.delete(email);
+      return reply.code(429).send({ message: "Demasiados intentos. Solicita un código nuevo." });
+    }
+
+    const ok = await bcrypt.compare(code, state.codeHash);
+
+    if (!ok) {
+      state.attempts += 1;
+      passwordResetRequests.set(email, state);
+      return reply.code(400).send({ message: "El código introducido no es correcto" });
+    }
+
+    state.verified = true;
+    passwordResetRequests.set(email, state);
+
+    const resetToken = app.jwt.sign(
+      {
+        tipo: "password_reset",
+        email,
+      },
+      { expiresIn: RESET_TOKEN_TTL_MS }
+    );
+
+    return {
+      ok: true,
+      resetToken,
+    };
+  });
+
+  app.post("/password/reset", async (request, reply) => {
+    const body = request.body as { resetToken?: string; password?: string };
+
+    if (!body.resetToken?.trim() || !body.password?.trim()) {
+      return reply.code(400).send({ message: "Faltan datos para actualizar la contraseña" });
+    }
+
+    if (body.password.length < 6) {
+      return reply.code(400).send({ message: "La contraseña debe tener al menos 6 caracteres" });
+    }
+
+    try {
+      const payload = app.jwt.verify(body.resetToken) as { tipo?: string; email?: string };
+
+      if (payload.tipo !== "password_reset" || !payload.email) {
+        return reply.code(401).send({ message: "La recuperación no es válida" });
+      }
+
+      const email = normalizarEmail(payload.email);
+      const state = passwordResetRequests.get(email);
+
+      if (!state?.verified || state.expiresAt < Date.now()) {
+        passwordResetRequests.delete(email);
+        return reply.code(401).send({ message: "La recuperación ha caducado. Solicita un código nuevo." });
+      }
+
+      const passwordHash = await bcrypt.hash(body.password, 10);
+
+      await prisma.usuario.update({
+        where: { email },
+        data: {
+          contrasena: passwordHash,
+          actualizado: new Date(),
+        },
+      });
+
+      passwordResetRequests.delete(email);
+
+      return {
+        ok: true,
+        message: "Contraseña actualizada correctamente",
+      };
+    } catch {
+      return reply.code(401).send({ message: "La recuperación no es válida o ha caducado" });
+    }
   });
 
   app.post("/logout", async () => {

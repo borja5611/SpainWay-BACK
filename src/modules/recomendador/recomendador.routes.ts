@@ -625,7 +625,7 @@ async function completarDiasConBbdd(
 async function llamarModeloIa(
   payload: PayloadRecomendador,
 ): Promise<IaResponse> {
-  const baseUrl = process.env.RECOMMENDER_API_URL || "http://127.0.0.1:8000";
+  const baseUrl = process.env.RECOMMENDER_API_URL || "https://spainway-ia.onrender.com";
 
   const response = await fetch(`${baseUrl}/recommend/itinerary`, {
     method: "POST",
@@ -1065,7 +1065,7 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
       return reply.code(502).send({
         ok: false,
         message:
-          "No se pudo conectar con el modelo IA. Revisa Spainway-IA en http://127.0.0.1:8000.",
+          "No se pudo conectar con el modelo IA. URL configurada: ${baseUrl}",
         error: error instanceof Error ? error.message : String(error),
       });
     }

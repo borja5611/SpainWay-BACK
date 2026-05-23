@@ -28,6 +28,7 @@ import recomendadorRoutes from "./modules/recomendador/recomendador.routes";
 import restauracionRoutes from "./modules/restauracion/restuaracion.routes";
 import eventosLiveRoutes from "./modules/eventos-live/eventos-live.routes";
 import chatAccionesRoutes from "./modules/chat-acciones/chat-acciones.routes";
+import meteorologiaRoutes from "./modules/meteorologia/meteorologia.routes";
 
 export async function buildApp() {
   const app = Fastify({
@@ -46,9 +47,14 @@ export async function buildApp() {
     allowedHeaders: ["Content-Type", "Authorization"],
   });
 
-await app.register(jwt, {
-  secret: process.env.JWT_SECRET || "spainway-secret-dev",
-});
+  const jwtSecret = process.env.JWT_SECRET;
+  if (env.NODE_ENV === "production" && !jwtSecret) {
+    throw new Error("JWT_SECRET es obligatorio en producción");
+  }
+
+  await app.register(jwt, {
+    secret: jwtSecret || "spainway-secret-dev",
+  });
 
   await app.register(swagger, {
     openapi: {
@@ -87,6 +93,7 @@ await app.register(jwt, {
   await app.register(restauracionRoutes, { prefix: "/api/restauracion" });
   await app.register(eventosLiveRoutes, { prefix: "/api/eventos-live" });
   await app.register(chatAccionesRoutes, { prefix: "/api/chat-acciones" });
+  await app.register(meteorologiaRoutes, { prefix: "/api/meteorologia" });
 
   return app;
 }

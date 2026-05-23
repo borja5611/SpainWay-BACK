@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+import { FastifyInstance, FastifyRequest } from "fastify";
 import { prisma } from "../../lib/prisma";
 import {
   applyManualItineraryAction,
@@ -10,6 +10,41 @@ import {
 function toInt(value: unknown): number | null {
   const n = Number(value);
   return Number.isInteger(n) ? n : null;
+}
+
+
+type JwtUsuario = {
+  id_usuario?: number;
+  email?: string;
+  rol?: string;
+  nombre_usuario?: string;
+};
+
+async function getUsuarioIdAutenticado(request: FastifyRequest): Promise<number> {
+  await request.jwtVerify();
+  const user = request.user as JwtUsuario;
+  const usuarioId = toInt(user.id_usuario);
+
+  if (usuarioId === null || usuarioId <= 0) {
+    throw new Error("Token sin usuario válido");
+  }
+
+  return usuarioId;
+}
+
+function validarUsuarioDeRuta(usuarioRuta: unknown, usuarioToken: number): boolean {
+  const usuarioRutaId = toInt(usuarioRuta);
+  return usuarioRutaId !== null && usuarioRutaId === usuarioToken;
+}
+
+async function existeItinerarioDelUsuario(idItinerario: number, idUsuario: number) {
+  return prisma.itinerario.findFirst({
+    where: {
+      id_itinerario: idItinerario,
+      id_usuario: idUsuario,
+    },
+    select: { id_itinerario: true },
+  });
 }
 
 function toDateOrNull(value: unknown): Date | null {
@@ -50,11 +85,18 @@ const includeItinerarioCompleto = {
 
 export default async function itinerariosRoutes(app: FastifyInstance) {
   app.get("/resumen/:id_usuario", async (request, reply) => {
-    const { id_usuario } = request.params as { id_usuario: string };
-    const usuarioId = toInt(id_usuario);
+    let usuarioId: number;
 
-    if (usuarioId === null) {
-      return reply.code(400).send({ message: "id_usuario inválido" });
+    try {
+      usuarioId = await getUsuarioIdAutenticado(request);
+    } catch {
+      return reply.code(401).send({ message: "No autorizado" });
+    }
+
+    const { id_usuario } = request.params as { id_usuario: string };
+
+    if (!validarUsuarioDeRuta(id_usuario, usuarioId)) {
+      return reply.code(403).send({ message: "No puedes consultar itinerarios de otro usuario" });
     }
 
     const itinerarios = await prisma.itinerario.findMany({
@@ -99,6 +141,14 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
   });
 
   app.get("/detalle/:id_itinerario", async (request, reply) => {
+    let usuarioId: number;
+
+    try {
+      usuarioId = await getUsuarioIdAutenticado(request);
+    } catch {
+      return reply.code(401).send({ message: "No autorizado" });
+    }
+
     const { id_itinerario } = request.params as { id_itinerario: string };
     const itinerarioId = toInt(id_itinerario);
 
@@ -106,8 +156,11 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "id_itinerario inválido" });
     }
 
-    const itinerario = await prisma.itinerario.findUnique({
-      where: { id_itinerario: itinerarioId },
+    const itinerario = await prisma.itinerario.findFirst({
+      where: {
+        id_itinerario: itinerarioId,
+        id_usuario: usuarioId,
+      },
       include: includeItinerarioCompleto,
     });
 
@@ -119,11 +172,18 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
   });
 
   app.get("/:id_usuario", async (request, reply) => {
-    const { id_usuario } = request.params as { id_usuario: string };
-    const usuarioId = toInt(id_usuario);
+    let usuarioId: number;
 
-    if (usuarioId === null) {
-      return reply.code(400).send({ message: "id_usuario inválido" });
+    try {
+      usuarioId = await getUsuarioIdAutenticado(request);
+    } catch {
+      return reply.code(401).send({ message: "No autorizado" });
+    }
+
+    const { id_usuario } = request.params as { id_usuario: string };
+
+    if (!validarUsuarioDeRuta(id_usuario, usuarioId)) {
+      return reply.code(403).send({ message: "No puedes consultar itinerarios de otro usuario" });
     }
 
     const itinerarios = await prisma.itinerario.findMany({
@@ -136,6 +196,14 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
   });
 
   app.post("/", async (request, reply) => {
+    let usuarioId: number;
+
+    try {
+      usuarioId = await getUsuarioIdAutenticado(request);
+    } catch {
+      return reply.code(401).send({ message: "No autorizado" });
+    }
+
     const body = request.body as {
       id_usuario?: number;
       titulo?: string;
@@ -147,11 +215,6 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
       accesibilidad?: string;
       estado?: string;
     };
-
-    const usuarioId = toInt(body.id_usuario);
-    if (usuarioId === null) {
-      return reply.code(400).send({ message: "id_usuario inválido" });
-    }
 
     const usuario = await prisma.usuario.findUnique({ where: { id_usuario: usuarioId } });
     if (!usuario) {
@@ -179,11 +242,24 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
   });
 
   app.patch("/:id_itinerario", async (request, reply) => {
+    let usuarioId: number;
+
+    try {
+      usuarioId = await getUsuarioIdAutenticado(request);
+    } catch {
+      return reply.code(401).send({ message: "No autorizado" });
+    }
+
     const { id_itinerario } = request.params as { id_itinerario: string };
     const itinerarioId = toInt(id_itinerario);
 
     if (itinerarioId === null) {
       return reply.code(400).send({ message: "id_itinerario inválido" });
+    }
+
+    const pertenece = await existeItinerarioDelUsuario(itinerarioId, usuarioId);
+    if (!pertenece) {
+      return reply.code(404).send({ message: "Itinerario no encontrado" });
     }
 
     const body = request.body as {
@@ -225,6 +301,18 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
       return reply.code(400).send({ message: "id_itinerario inválido" });
     }
 
+    let usuarioId: number;
+    try {
+      usuarioId = await getUsuarioIdAutenticado(request);
+    } catch {
+      return reply.code(401).send({ message: "No autorizado" });
+    }
+
+    const pertenece = await existeItinerarioDelUsuario(itinerarioId, usuarioId);
+    if (!pertenece) {
+      return reply.code(404).send({ message: "Itinerario no encontrado" });
+    }
+
     const body = request.body as ManualItineraryAction;
 
     try {
@@ -239,11 +327,24 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
   });
 
   app.post("/:id_itinerario/regenerar-dia", async (request, reply) => {
+    let usuarioId: number;
+
+    try {
+      usuarioId = await getUsuarioIdAutenticado(request);
+    } catch {
+      return reply.code(401).send({ message: "No autorizado" });
+    }
+
     const { id_itinerario } = request.params as { id_itinerario: string };
     const itinerarioId = toInt(id_itinerario);
 
     if (itinerarioId === null) {
       return reply.code(400).send({ message: "id_itinerario inválido" });
+    }
+
+    const pertenece = await existeItinerarioDelUsuario(itinerarioId, usuarioId);
+    if (!pertenece) {
+      return reply.code(404).send({ message: "Itinerario no encontrado" });
     }
 
     const body = request.body as { dayNumber?: number; mensaje?: string; message?: string };
@@ -274,6 +375,14 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
   });
 
 app.delete("/:idItinerario", async (request, reply) => {
+  let usuarioId: number;
+
+  try {
+    usuarioId = await getUsuarioIdAutenticado(request);
+  } catch {
+    return reply.code(401).send({ message: "No autorizado" });
+  }
+
   const params = request.params as { idItinerario?: string };
   const idItinerario = Number(params.idItinerario);
 
@@ -281,10 +390,7 @@ app.delete("/:idItinerario", async (request, reply) => {
     return reply.code(400).send({ message: "idItinerario inválido" });
   }
 
-  const existente = await prisma.itinerario.findUnique({
-    where: { id_itinerario: idItinerario },
-    select: { id_itinerario: true },
-  });
+  const existente = await existeItinerarioDelUsuario(idItinerario, usuarioId);
 
   if (!existente) {
     return reply.code(404).send({ message: "Itinerario no encontrado" });

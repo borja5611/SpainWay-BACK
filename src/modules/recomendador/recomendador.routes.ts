@@ -1,5 +1,14 @@
 import { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
+import {
+  contextoToTexto,
+  obtenerContextoUsuarioSpainWay,
+  type ContextoUsuarioSpainWay,
+} from "./recomendador-contexto.service";
+import {
+  obtenerContextoMeteorologicoSpainWay,
+  type ContextoMeteorologicoSpainWay,
+} from "../meteorologia/meteorologia.service";
 
 type PayloadRecomendador = {
   id_usuario?: number;
@@ -25,6 +34,9 @@ type PayloadRecomendador = {
   visited_poi_names?: string[];
   negative_preferences?: string[];
   include_live_events?: boolean;
+  user_message?: string;
+  user_context?: ContextoUsuarioSpainWay | null;
+  weather_context?: ContextoMeteorologicoSpainWay | null;
 };
 
 type IaPoi = {
@@ -1029,7 +1041,7 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
       nombresExcluidosPorTexto,
     );
 
-    const payload: PayloadRecomendador = {
+    let payload: PayloadRecomendador = {
       id_usuario: idUsuario,
       destination,
       days,
@@ -1055,6 +1067,35 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
         : [],
       negative_preferences: negativePreferences,
       include_live_events: body.include_live_events === true,
+      user_message: typeof body.user_message === "string" ? body.user_message : undefined,
+    };
+
+    const [userContext, weatherContext] = await Promise.all([
+      obtenerContextoUsuarioSpainWay(idUsuario).catch((error) => {
+        request.log.warn(error, "No se pudo recuperar el contexto del usuario");
+        return null;
+      }),
+      obtenerContextoMeteorologicoSpainWay({
+        lat: Number(payload.base_lat),
+        lon: Number(payload.base_lon),
+        dates: payload.dates,
+        days: Number(payload.days ?? 1),
+      }).catch((error) => {
+        request.log.warn(error, "No se pudo recuperar la meteorología");
+        return null;
+      }),
+    ]);
+
+    const contextoTexto = userContext ? contextoToTexto(userContext) : "";
+    const notasConContexto = [payload.notes, contextoTexto]
+      .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      .join("\n");
+
+    payload = {
+      ...payload,
+      notes: notasConContexto,
+      user_context: userContext,
+      weather_context: weatherContext,
     };
 
     let ia: IaResponse;
@@ -1065,7 +1106,7 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
       return reply.code(502).send({
         ok: false,
         message:
-          "No se pudo conectar con el modelo IA. URL configurada: ${baseUrl}",
+          `No se pudo conectar con el modelo IA. URL configurada: ${process.env.RECOMMENDER_API_URL || "https://spainway-ia.onrender.com"}`,
         error: error instanceof Error ? error.message : String(error),
       });
     }

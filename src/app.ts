@@ -47,14 +47,9 @@ export async function buildApp() {
     allowedHeaders: ["Content-Type", "Authorization"],
   });
 
-  const jwtSecret = process.env.JWT_SECRET;
-  if (env.NODE_ENV === "production" && !jwtSecret) {
-    throw new Error("JWT_SECRET es obligatorio en producción");
-  }
-
-  await app.register(jwt, {
-    secret: jwtSecret || "spainway-secret-dev",
-  });
+await app.register(jwt, {
+  secret: process.env.JWT_SECRET || "spainway-secret-dev",
+});
 
   await app.register(swagger, {
     openapi: {

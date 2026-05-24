@@ -51,11 +51,16 @@ export const env = {
   TICKETMASTER_API_KEY: optionalString(process.env.TICKETMASTER_API_KEY),
   PREDICTHQ_API_KEY: optionalString(process.env.PREDICTHQ_API_KEY),
   PREDICTHQ_RADIUS_KM: optionalNumber(process.env.PREDICTHQ_RADIUS_KM, 25),
+
   SERPAPI_API_KEY: optionalString(process.env.SERPAPI_API_KEY),
+  SERPAPI_TIMEOUT_MS: optionalNumber(process.env.SERPAPI_TIMEOUT_MS, 8000),
 
   EVENTS_LIVE_ENABLED: optionalBoolean(process.env.EVENTS_LIVE_ENABLED, true),
   EVENTS_LIVE_TIMEOUT_MS: optionalNumber(process.env.EVENTS_LIVE_TIMEOUT_MS, 7000),
   EVENTS_LIVE_MAX_RESULTS: optionalNumber(process.env.EVENTS_LIVE_MAX_RESULTS, 30),
+
+  LOCAL_SEARCH_ENABLED: optionalBoolean(process.env.LOCAL_SEARCH_ENABLED, true),
+  LOCAL_SEARCH_MAX_RESULTS: optionalNumber(process.env.LOCAL_SEARCH_MAX_RESULTS, 18),
 
   SMTP_HOST: optionalString(process.env.SMTP_HOST),
   SMTP_PORT: optionalNumber(process.env.SMTP_PORT, 587),

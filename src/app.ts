@@ -29,6 +29,7 @@ import restauracionRoutes from "./modules/restauracion/restuaracion.routes";
 import eventosLiveRoutes from "./modules/eventos-live/eventos-live.routes";
 import chatAccionesRoutes from "./modules/chat-acciones/chat-acciones.routes";
 import meteorologiaRoutes from "./modules/meteorologia/meteorologia.routes";
+import lugaresLocalesRoutes from "./modules/lugares-locales/lugares-locales.routes";
 
 export async function buildApp() {
   const app = Fastify({
@@ -97,6 +98,7 @@ export async function buildApp() {
   await app.register(eventosLiveRoutes, { prefix: "/api/eventos-live" });
   await app.register(chatAccionesRoutes, { prefix: "/api/chat-acciones" });
   await app.register(meteorologiaRoutes, { prefix: "/api/meteorologia" });
+  await app.register(lugaresLocalesRoutes, { prefix: "/api/lugares-locales" });
 
   return app;
 }

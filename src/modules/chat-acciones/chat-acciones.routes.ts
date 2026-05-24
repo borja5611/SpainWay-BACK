@@ -467,6 +467,144 @@ async function llamarParserIA(params: {
   }
 }
 
+
+function getDestinoPoiWhereChat(destino?: string | null): any {
+  const d = normalizar(destino);
+  if (!d) return {};
+
+  if (d.includes("valencia")) {
+    return {
+      OR: [
+        { direccion: { contains: "Valencia", mode: "insensitive" as const } },
+        { municipio: { nombre: { contains: "Valencia", mode: "insensitive" as const } } },
+        { municipio: { provincia: { nombre: { contains: "Valencia", mode: "insensitive" as const } } } },
+        { municipio: { provincia: { comunidad: { nombre: { contains: "Valenciana", mode: "insensitive" as const } } } } },
+        { destacados_ccaa: { some: { comunidad: { contains: "valencia", mode: "insensitive" as const } } } },
+      ],
+    };
+  }
+
+  if (d.includes("barcelona") || d.includes("cataluna") || d.includes("catalunya")) {
+    return {
+      OR: [
+        { direccion: { contains: "Barcelona", mode: "insensitive" as const } },
+        { municipio: { nombre: { contains: "Barcelona", mode: "insensitive" as const } } },
+        { municipio: { provincia: { nombre: { contains: "Barcelona", mode: "insensitive" as const } } } },
+        { municipio: { provincia: { comunidad: { nombre: { contains: "Catal", mode: "insensitive" as const } } } } },
+        { destacados_ccaa: { some: { comunidad: { contains: "catal", mode: "insensitive" as const } } } },
+      ],
+    };
+  }
+
+  if (d.includes("madrid")) {
+    return {
+      OR: [
+        { direccion: { contains: "Madrid", mode: "insensitive" as const } },
+        { municipio: { nombre: { contains: "Madrid", mode: "insensitive" as const } } },
+        { municipio: { provincia: { nombre: { contains: "Madrid", mode: "insensitive" as const } } } },
+        { municipio: { provincia: { comunidad: { nombre: { contains: "Madrid", mode: "insensitive" as const } } } } },
+        { destacados_ccaa: { some: { comunidad: { contains: "madrid", mode: "insensitive" as const } } } },
+      ],
+    };
+  }
+
+  const limpio = destino?.split(",").map((x) => x.trim()).filter(Boolean).at(-1) || destino || "";
+  return {
+    OR: [
+      { direccion: { contains: limpio, mode: "insensitive" as const } },
+      { municipio: { nombre: { contains: limpio, mode: "insensitive" as const } } },
+      { municipio: { provincia: { nombre: { contains: limpio, mode: "insensitive" as const } } } },
+      { municipio: { provincia: { comunidad: { nombre: { contains: limpio, mode: "insensitive" as const } } } } },
+      { destacados_ccaa: { some: { comunidad: { contains: limpio, mode: "insensitive" as const } } } },
+    ],
+  };
+}
+
+function getTextoPoiChat(poi: any): string {
+  return [
+    poi?.nombre,
+    poi?.tipo,
+    poi?.subcategoria,
+    poi?.descripcion,
+    poi?.direccion,
+    poi?.categoria_poi?.nombre,
+    poi?.municipio?.nombre,
+    poi?.municipio?.provincia?.nombre,
+    poi?.municipio?.provincia?.comunidad?.nombre,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function scorePoiChat(poi: any, intereses: string[]) {
+  const texto = normalizar(getTextoPoiChat(poi));
+  const hits = intereses.reduce((acc, item) => acc + (texto.includes(normalizar(item)) ? 1 : 0), 0);
+  return (
+    hits * 4 +
+    (poi.destacados_ccaa?.length ? 4 : 0) +
+    (poi.latitud && poi.longitud ? 1 : -2) +
+    (poi.descripcion ? 1 : 0) +
+    Number(poi.puntuacion || 0) +
+    Number(poi.popularidad || 0) / 100
+  );
+}
+
+async function recomendarPoisLocalFallback(params: {
+  destino: string;
+  quantity: number;
+  intereses: string[];
+}) {
+  const destinoWhere = getDestinoPoiWhereChat(params.destino);
+  const textWhere = params.intereses.length
+    ? {
+        OR: params.intereses.flatMap((pref) => [
+          { nombre: { contains: pref, mode: "insensitive" as const } },
+          { tipo: { contains: pref, mode: "insensitive" as const } },
+          { subcategoria: { contains: pref, mode: "insensitive" as const } },
+          { descripcion: { contains: pref, mode: "insensitive" as const } },
+          { categoria_poi: { nombre: { contains: pref, mode: "insensitive" as const } } },
+        ]),
+      }
+    : {};
+
+  const pois = await prisma.poi.findMany({
+    where: { valido: { not: false }, AND: [destinoWhere, textWhere] },
+    include: {
+      municipio: { include: { provincia: { include: { comunidad: true } } } },
+      categoria_poi: true,
+      destacados_ccaa: true,
+    },
+    take: 300,
+  });
+
+  return pois
+    .map((poi: any) => ({ poi, score: scorePoiChat(poi, params.intereses) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, params.quantity)
+    .map(({ poi }: any) => ({
+      id_poi: poi.id_poi,
+      id: poi.id_poi,
+      global_id: poi.id_global,
+      name: poi.nombre,
+      nombre: poi.nombre,
+      category: poi.categoria_poi?.nombre || poi.tipo || "Lugar",
+      categoria: poi.categoria_poi?.nombre || poi.tipo || "Lugar",
+      subcategory: poi.subcategoria || null,
+      municipality: poi.municipio?.nombre || null,
+      municipio: poi.municipio?.nombre || null,
+      province: poi.municipio?.provincia?.nombre || null,
+      ccaa: poi.municipio?.provincia?.comunidad?.nombre || null,
+      address: poi.direccion || null,
+      lat: poi.latitud ?? null,
+      lon: poi.longitud ?? null,
+      description: poi.descripcion || "Lugar recomendado por SpainWay a partir de POIs reales de la base de datos.",
+      descripcion: poi.descripcion || null,
+      image_url: poi.destacados_ccaa?.find((item: any) => item.imagen_url)?.imagen_url || null,
+      reason: "Recomendación local de respaldo usando POIs reales de la base de datos.",
+      tags: ["fallback_backend", "poi_real"],
+    }));
+}
+
 async function recomendarPoisLibres(params: {
   idConversacion: number;
   user: any;
@@ -512,7 +650,7 @@ async function recomendarPoisLibres(params: {
   };
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
+  const timeout = setTimeout(() => controller.abort(), 30000);
   try {
     const response = await fetch(
       `${env.RECOMMENDER_API_URL.replace(/\/$/, "")}/recommend/pois`,
@@ -559,18 +697,47 @@ async function recomendarPoisLibres(params: {
       parsed: params.parsed,
     };
   } catch (error) {
-    const assistant = await crearMensaje(
-      params.idConversacion,
-      "assistant",
-      "No he podido consultar el recomendador ahora mismo. Prueba de nuevo en unos segundos.",
-    );
-    return {
-      user: params.user,
-      assistant,
-      action: "recommend_error",
-      error: error instanceof Error ? error.message : "error",
-      parsed: params.parsed,
-    };
+    // Respaldo definitivo: si la IA tarda, Render está frío o /recommend/pois cae,
+    // nunca dejamos al usuario sin respuesta. Buscamos POIs reales en PostgreSQL.
+    try {
+      const items = await recomendarPoisLocalFallback({ destino, quantity, intereses });
+      const texto = items.length
+        ? `Te recomiendo ${items.length} sitios reales en ${destino}:\n\n${items
+            .map((poi: any, i: number) => {
+              const name = poi.name || poi.nombre || "POI";
+              const cat = poi.category || poi.categoria || "lugar";
+              const muni = poi.municipality || poi.municipio || poi.province || "";
+              const desc = String(poi.description || poi.descripcion || poi.reason || "")
+                .replace(/\s+/g, " ")
+                .slice(0, 180);
+              return `${i + 1}. ${name}\n   Tipo: ${cat}${muni ? ` · ${muni}` : ""}${desc ? `\n   ${desc}${desc.length >= 180 ? "..." : ""}` : ""}`;
+            })
+            .join("\n\n")}\n\nHe usado el respaldo local porque el recomendador IA no respondió a tiempo.`
+        : `No he encontrado POIs suficientemente fiables en ${destino}. Prueba con otro interés o amplía el destino.`;
+
+      const assistant = await crearMensaje(params.idConversacion, "assistant", texto);
+      return {
+        user: params.user,
+        assistant,
+        action: "recommend_pois_fallback_backend",
+        pois: items,
+        parsed: params.parsed,
+        warning: error instanceof Error ? error.message : "recommend_timeout_or_error",
+      };
+    } catch (fallbackError) {
+      const assistant = await crearMensaje(
+        params.idConversacion,
+        "assistant",
+        "No he podido consultar el recomendador ahora mismo. Prueba de nuevo en unos segundos.",
+      );
+      return {
+        user: params.user,
+        assistant,
+        action: "recommend_error",
+        error: fallbackError instanceof Error ? fallbackError.message : error instanceof Error ? error.message : "error",
+        parsed: params.parsed,
+      };
+    }
   } finally {
     clearTimeout(timeout);
   }

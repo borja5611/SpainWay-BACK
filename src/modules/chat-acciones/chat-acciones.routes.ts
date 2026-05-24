@@ -1,5 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
+import { env } from "../../config/env";
 import {
   cargarItinerarioDeConversacion,
   insertPoiIntoItinerary,
@@ -10,7 +11,10 @@ import {
   resumenDiaActualizado,
   swapPoisInDay,
 } from "../itinerarios/itinerario-edicion.service";
-import { buscarEventosLiveAgregado, type LiveEvent } from "../eventos-live/eventos-live.routes";
+import {
+  buscarEventosLiveAgregado,
+  type LiveEvent,
+} from "../eventos-live/eventos-live.routes";
 
 function toInt(value: unknown): number | null {
   const n = Number(value);
@@ -95,11 +99,15 @@ function getAllDayNumbers(text: string): number[] {
 }
 
 function hasRemove(text: string) {
-  return /\b(quita|quites|quitar|elimina|elimines|eliminar|borra|borrar|saca|retira|suprime)\b/.test(normalizar(text));
+  return /\b(quita|quites|quitar|elimina|elimines|eliminar|borra|borrar|saca|retira|suprime)\b/.test(
+    normalizar(text),
+  );
 }
 
 function hasInsert(text: string) {
-  return /\b(anade|añade|anadas|añadas|agrega|agregar|mete|meter|incluye|incorpora|pon|pongas|ponme|aparece|aniade|añadir|anadir)\b/.test(normalizar(text));
+  return /\b(anade|añade|anadas|añadas|agrega|agregar|mete|meter|incluye|incorpora|pon|pongas|ponme|aparece|aniade|añadir|anadir)\b/.test(
+    normalizar(text),
+  );
 }
 
 function hasReplace(text: string) {
@@ -122,23 +130,46 @@ function hasMove(text: string) {
 
 function hasRegenerate(text: string) {
   const t = normalizar(text);
-  return /\b(regenera|regenerar|rehaz|rehacer|rediseña|redisena)\b/.test(t) && /\b(dia|día)\b/.test(t);
+  return (
+    /\b(regenera|regenerar|rehaz|rehacer|rediseña|redisena)\b/.test(t) &&
+    /\b(dia|día)\b/.test(t)
+  );
 }
 
 function hasSwap(text: string) {
-  return /\b(intercambia|intercambiar|swap|cambia el orden|mueve.*posicion|posición)\b/.test(normalizar(text));
+  return /\b(intercambia|intercambiar|swap|cambia el orden|mueve.*posicion|posición)\b/.test(
+    normalizar(text),
+  );
 }
 
 function stripDayReferences(text: string): string {
   return normalizar(text)
-    .replace(new RegExp(`(?:del|de la|de el|al|a la|a el|en el|en la|para el|para la|al)?\\s*(?:dia|día)\\s*${DAY_WORD}`, "gi"), " ")
-    .replace(new RegExp(`(?:del|de la|de el|al|a la|a el|en el|en la|para el|para la|al)?\\s*${DAY_WORD}\\s*(?:dia|día)`, "gi"), " ");
+    .replace(
+      new RegExp(
+        `(?:del|de la|de el|al|a la|a el|en el|en la|para el|para la|al)?\\s*(?:dia|día)\\s*${DAY_WORD}`,
+        "gi",
+      ),
+      " ",
+    )
+    .replace(
+      new RegExp(
+        `(?:del|de la|de el|al|a la|a el|en el|en la|para el|para la|al)?\\s*${DAY_WORD}\\s*(?:dia|día)`,
+        "gi",
+      ),
+      " ",
+    );
 }
 
 function limpiarPoiName(text: string): string {
   return stripDayReferences(text)
-    .replace(/\b(?:quita|quites|quitar|elimina|elimines|eliminar|borra|borrar|saca|retira|suprime|anade|añade|anadas|añadas|agrega|agregar|mete|meter|incluye|incorpora|pon|pongas|ponme|aparece|mueve|mover|pasa|pasar|traslada|cambia|cambiar|sustituye|reemplaza|aniade|añadir|anadir)\b/g, " ")
-    .replace(/\b(?:quiero|que|me|mi|el|la|los|las|un|una|unos|unas|poi|pois|punto|puntos|sitio|sitios|lugar|lugares|nuevo|nueva|nuevos|nuevas|porfa|favor|por|de|del|a|al|en|lo|le|para|y|tambien|también|buenas|tardes|buenos|dias|día|dia|hola|ese|esa|este|esta|nuestro|nuestra)\b/g, " ")
+    .replace(
+      /\b(?:quita|quites|quitar|elimina|elimines|eliminar|borra|borrar|saca|retira|suprime|anade|añade|anadas|añadas|agrega|agregar|mete|meter|incluye|incorpora|pon|pongas|ponme|aparece|mueve|mover|pasa|pasar|traslada|cambia|cambiar|sustituye|reemplaza|aniade|añadir|anadir)\b/g,
+      " ",
+    )
+    .replace(
+      /\b(?:quiero|que|me|mi|el|la|los|las|un|una|unos|unas|poi|pois|punto|puntos|sitio|sitios|lugar|lugares|nuevo|nueva|nuevos|nuevas|porfa|favor|por|de|del|a|al|en|lo|le|para|y|tambien|también|buenas|tardes|buenos|dias|día|dia|hola|ese|esa|este|esta|nuestro|nuestra)\b/g,
+      " ",
+    )
     .replace(/[^a-z0-9ñç\s]/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -146,27 +177,36 @@ function limpiarPoiName(text: string): string {
 
 function getActionSegment(text: string, words: string): string | null {
   const t = normalizar(text);
-  const pattern = new RegExp(`(?:${words})\\s+(?:el|la|los|las|un|una|poi|pois|punto|sitio|lugar)?\\s*([\\s\\S]+?)(?:\\s+y\\s+(?:lo\\s+)?(?:anade|añade|anadas|añadas|agrega|mete|incluye|pon|pongas|pasa|mueve|aparece|aniade|anadir|añadir|cambia|sustituye|reemplaza)\\b|\\s+(?:del|de la|de el|al|a la|a el|en el|en la|para el|para la)\\s*(?:dia|día)\\s*${DAY_WORD}|[,.;]|$)`, "i");
+  const pattern = new RegExp(
+    `(?:${words})\\s+(?:el|la|los|las|un|una|poi|pois|punto|sitio|lugar)?\\s*([\\s\\S]+?)(?:\\s+y\\s+(?:lo\\s+)?(?:anade|añade|anadas|añadas|agrega|mete|incluye|pon|pongas|pasa|mueve|aparece|aniade|anadir|añadir|cambia|sustituye|reemplaza)\\b|\\s+(?:del|de la|de el|al|a la|a el|en el|en la|para el|para la)\\s*(?:dia|día)\\s*${DAY_WORD}|[,.;]|$)`,
+    "i",
+  );
   const match = t.match(pattern);
   return match?.[1] ?? null;
 }
 
 function extractRemoveName(text: string) {
-  const actionWords = "quita|quites|quitar|elimina|elimines|eliminar|borra|borrar|saca|retira|suprime";
+  const actionWords =
+    "quita|quites|quitar|elimina|elimines|eliminar|borra|borrar|saca|retira|suprime";
   const captured = getActionSegment(text, actionWords);
   return limpiarPoiName(captured || text);
 }
 
 function extractInsertQuery(text: string) {
-  const actionWords = "anade|añade|anadas|añadas|agrega|agregar|mete|meter|incluye|incorpora|pon|pongas|ponme|aparece|aniade|añadir|anadir";
+  const actionWords =
+    "anade|añade|anadas|añadas|agrega|agregar|mete|meter|incluye|incorpora|pon|pongas|ponme|aparece|aniade|añadir|anadir";
   const captured = getActionSegment(text, actionWords);
   const cleaned = limpiarPoiName(captured || text)
-    .replace(/\b(?:mejor|mejores|valora|valores|valorado|valorada|valorados|valoradas|cercano|cercana|cercanos|cercanas|tipo|cosas|alguna|alguno|algo|otro|otra|diferente|alternativa)\b/g, " ")
+    .replace(
+      /\b(?:mejor|mejores|valora|valores|valorado|valorada|valorados|valoradas|cercano|cercana|cercanos|cercanas|tipo|cosas|alguna|alguno|algo|otro|otra|diferente|alternativa)\b/g,
+      " ",
+    )
     .replace(/\s+/g, " ")
     .trim();
 
   const t = normalizar(text);
-  if (cleaned && !["poi", "pois", "punto", "sitio", "lugar"].includes(cleaned)) return cleaned;
+  if (cleaned && !["poi", "pois", "punto", "sitio", "lugar"].includes(cleaned))
+    return cleaned;
 
   if (t.includes("playa")) return "playa";
   if (t.includes("gastronom")) return "gastronomía";
@@ -176,35 +216,57 @@ function extractInsertQuery(text: string) {
   return "destacado turístico";
 }
 
-function extractSwapPositions(text: string): { fromIndex: number; toIndex: number } | null {
+function extractSwapPositions(
+  text: string,
+): { fromIndex: number; toIndex: number } | null {
   const t = normalizar(text);
-  const nums = [...t.matchAll(/(?:posicion|posición|parada)?\s*(\d+)/g)].map((m) => Number(m[1]));
+  const nums = [...t.matchAll(/(?:posicion|posición|parada)?\s*(\d+)/g)].map(
+    (m) => Number(m[1]),
+  );
   if (nums.length >= 2) return { fromIndex: nums[0] - 1, toIndex: nums[1] - 1 };
   return null;
 }
 
-async function crearMensaje(idConversacion: number, rol: "user" | "assistant", contenido: string) {
+async function crearMensaje(
+  idConversacion: number,
+  rol: "user" | "assistant",
+  contenido: string,
+) {
   return prisma.mensaje.create({
-    data: { id_conversacion: idConversacion, rol, contenido, creado: new Date() },
+    data: {
+      id_conversacion: idConversacion,
+      rol,
+      contenido,
+      creado: new Date(),
+    },
   });
 }
 
-function respuestaConDetalle(texto: string, itinerario: any, dayNumber: number) {
+function respuestaConDetalle(
+  texto: string,
+  itinerario: any,
+  dayNumber: number,
+) {
   return `${texto}\n\nDía ${dayNumber} actualizado:\n${resumenDiaActualizado(itinerario, dayNumber)}`;
 }
 
-
 function hasEventSearch(text: string) {
   const t = normalizar(text);
-  return /\b(evento|eventos|concierto|conciertos|festival|festivales|teatro|obra|obras|show|shows|actuacion|actuaciones|directo|live)\b/.test(t);
+  return /\b(evento|eventos|concierto|conciertos|festival|festivales|teatro|obra|obras|show|shows|actuacion|actuaciones|directo|live)\b/.test(
+    t,
+  );
 }
 
 function inferirDestinoEventos(text: string, fallback?: string | null) {
   const raw = text.trim();
-  const explicit = raw.match(/(?:en|por|cerca de)\s+([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]{2,40})(?:\s+(?:hoy|mañana|manana|este|esta|el|la|durante|para|con|de)|[?.!,]|$)/);
+  const explicit = raw.match(
+    /(?:en|por|cerca de)\s+([A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]{2,40})(?:\s+(?:hoy|mañana|manana|este|esta|el|la|durante|para|con|de)|[?.!,]|$)/,
+  );
   if (explicit?.[1]) return explicit[1].trim();
 
-  const known = raw.match(/(?:madrid|valencia|barcelona|sevilla|malaga|málaga|granada|bilbao|zaragoza|alicante|cantabria|santander|tenerife|canarias|baleares|ibiza)/i);
+  const known = raw.match(
+    /(?:madrid|valencia|barcelona|sevilla|malaga|málaga|granada|bilbao|zaragoza|alicante|cantabria|santander|tenerife|canarias|baleares|ibiza)/i,
+  );
   if (known?.[0]) return known[0].trim();
 
   const fallbackClean = fallback
@@ -237,12 +299,25 @@ function addDays(date: Date, days: number) {
   return copy;
 }
 
-function rangoFechasEventos(text: string, itinerario?: any): { from: string; to: string } {
+function rangoFechasEventos(
+  text: string,
+  itinerario?: any,
+): { from: string; to: string } {
   const t = normalizar(text);
   const today = new Date();
 
-  if (itinerario?.inicio && itinerario?.fin && !t.includes("hoy") && !t.includes("mañana") && !t.includes("manana") && !t.includes("fin de semana")) {
-    return { from: String(itinerario.inicio).slice(0, 10), to: String(itinerario.fin).slice(0, 10) };
+  if (
+    itinerario?.inicio &&
+    itinerario?.fin &&
+    !t.includes("hoy") &&
+    !t.includes("mañana") &&
+    !t.includes("manana") &&
+    !t.includes("fin de semana")
+  ) {
+    return {
+      from: String(itinerario.inicio).slice(0, 10),
+      to: String(itinerario.fin).slice(0, 10),
+    };
   }
 
   if (t.includes("hoy")) {
@@ -266,9 +341,247 @@ function rangoFechasEventos(text: string, itinerario?: any): { from: string; to:
   return { from: ymdMadrid(today), to: ymdMadrid(addDays(today, 7)) };
 }
 
+type ParsedChatAction = {
+  action?: string | null;
+  destination?: string | null;
+  quantity?: number | null;
+  query?: string | null;
+  dayNumber?: number | null;
+  fromDayNumber?: number | null;
+  toDayNumber?: number | null;
+  poiName?: string | null;
+  oldPoiName?: string | null;
+  interests?: string[] | null;
+  transport?: string | null;
+  pace?: string | null;
+  time_context?: string | null;
+  confidence?: number | null;
+  reasoning_short?: string | null;
+  used_external_llm?: boolean;
+};
+
+function isGenericChange(text?: string | null): boolean {
+  const t = normalizar(text);
+  if (!t) return false;
+  return /\b(otros|otras|diferentes|cambialos|cambiarlos|cambia los pois|cambia todos|renueva|renovar|sustituye todos|pon otros)\b/.test(
+    t,
+  );
+}
+
+function sanitizeParsedAction(
+  parsed: ParsedChatAction | null,
+  contenido: string,
+): ParsedChatAction {
+  const fallbackDay = getDayNumberFromText(contenido);
+  const action = parsed?.action || "unknown";
+  return {
+    action,
+    destination: parsed?.destination || null,
+    quantity: typeof parsed?.quantity === "number" ? parsed.quantity : null,
+    query: parsed?.query || null,
+    dayNumber:
+      typeof parsed?.dayNumber === "number" ? parsed.dayNumber : fallbackDay,
+    fromDayNumber:
+      typeof parsed?.fromDayNumber === "number" ? parsed.fromDayNumber : null,
+    toDayNumber:
+      typeof parsed?.toDayNumber === "number" ? parsed.toDayNumber : null,
+    poiName: parsed?.poiName || null,
+    oldPoiName: parsed?.oldPoiName || null,
+    interests: Array.isArray(parsed?.interests) ? parsed?.interests : null,
+    transport: parsed?.transport || null,
+    pace: parsed?.pace || null,
+    time_context: parsed?.time_context || null,
+    confidence: typeof parsed?.confidence === "number" ? parsed.confidence : 0,
+    reasoning_short: parsed?.reasoning_short || null,
+    used_external_llm: Boolean(parsed?.used_external_llm),
+  };
+}
+
+async function llamarParserIA(params: {
+  contenido: string;
+  conversacion: any;
+  itinerario: any | null;
+  idConversacion: number;
+}): Promise<ParsedChatAction> {
+  const mensajes = await prisma.mensaje.findMany({
+    where: { id_conversacion: params.idConversacion },
+    orderBy: { creado: "desc" },
+    take: 10,
+  });
+
+  const poisByDay = (
+    params.itinerario?.dias ||
+    params.itinerario?.day_plans ||
+    []
+  ).map((dia: any) => ({
+    dayNumber:
+      dia.numero_dia ?? dia.day_number ?? dia.dia ?? dia.numero ?? null,
+    theme: dia.titulo ?? dia.theme ?? dia.nombre ?? null,
+    pois: (dia.elementos || dia.pois || [])
+      .map((el: any) => ({
+        name: el.poi?.nombre ?? el.nombre ?? el.name ?? el.poiName ?? null,
+        category:
+          el.poi?.categoria?.nombre ?? el.categoria ?? el.category ?? null,
+        municipality:
+          el.poi?.municipio?.nombre ?? el.municipio ?? el.municipality ?? null,
+      }))
+      .filter((x: any) => x.name),
+  }));
+
+  const payload = {
+    message: params.contenido,
+    current_destination:
+      params.itinerario?.destino ?? params.conversacion?.titulo ?? null,
+    current_days:
+      params.itinerario?.dias?.length ??
+      params.itinerario?.day_plans?.length ??
+      null,
+    itinerary_id: params.itinerario?.id_itinerario ?? null,
+    pois_by_day: poisByDay,
+    recent_messages: mensajes.reverse().map((msg) => ({
+      role: msg.rol,
+      content: String(msg.contenido || "").slice(0, 700),
+    })),
+    force_external_llm: true,
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 9000);
+  try {
+    const response = await fetch(
+      `${env.RECOMMENDER_API_URL.replace(/\/$/, "")}/chat/parse-action`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      },
+    );
+    if (!response.ok) return sanitizeParsedAction(null, params.contenido);
+    const data = await response.json();
+    return sanitizeParsedAction(data, params.contenido);
+  } catch {
+    return sanitizeParsedAction(null, params.contenido);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function recomendarPoisLibres(params: {
+  idConversacion: number;
+  user: any;
+  contenido: string;
+  parsed: ParsedChatAction;
+  fallbackDestino?: string | null;
+}) {
+  const destino =
+    params.parsed.destination ||
+    inferirDestinoEventos(params.contenido, params.fallbackDestino) ||
+    params.fallbackDestino;
+  if (!destino) {
+    const assistant = await crearMensaje(
+      params.idConversacion,
+      "assistant",
+      "Dime el destino para recomendarte sitios reales. Ejemplo: “quiero 2 museos en Valencia esta tarde”.",
+    );
+    return {
+      user: params.user,
+      assistant,
+      action: "recommend_need_destination",
+      parsed: params.parsed,
+    };
+  }
+
+  const quantity = Math.min(
+    Math.max(Number(params.parsed.quantity || 3), 1),
+    6,
+  );
+  const intereses = params.parsed.interests?.length
+    ? params.parsed.interests
+    : [params.parsed.query || "cultura"];
+  const payload = {
+    destination: destino,
+    days: 1,
+    pace: params.parsed.pace || "relajado",
+    transport: params.parsed.transport || "transporte público",
+    interests: intereses,
+    must_include: [],
+    excluded_poi_global_ids: [],
+    excluded_poi_names: [],
+    negative_preferences: [],
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(
+      `${env.RECOMMENDER_API_URL.replace(/\/$/, "")}/recommend/pois`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      },
+    );
+    if (!response.ok) throw new Error(`IA ${response.status}`);
+    const data = await response.json();
+    const items = Array.isArray(data.items)
+      ? data.items.slice(0, quantity)
+      : [];
+
+    const texto = items.length
+      ? `Te recomiendo ${items.length} sitios reales en ${destino}:\n\n${items
+          .map((poi: any, i: number) => {
+            const name = poi.name || poi.nombre || "POI";
+            const cat = poi.category || poi.categoria || "lugar";
+            const muni =
+              poi.municipality || poi.municipio || poi.province || "";
+            const desc = String(
+              poi.description || poi.descripcion || poi.reason || "",
+            )
+              .replace(/\s+/g, " ")
+              .slice(0, 180);
+            return `${i + 1}. ${name}\n   Tipo: ${cat}${muni ? ` · ${muni}` : ""}${desc ? `\n   ${desc}${desc.length >= 180 ? "..." : ""}` : ""}`;
+          })
+          .join("\n\n")}`
+      : `No he encontrado POIs suficientemente fiables en ${destino} para esa consulta. Prueba con otro interés o amplía el destino.`;
+
+    const assistant = await crearMensaje(
+      params.idConversacion,
+      "assistant",
+      texto,
+    );
+    return {
+      user: params.user,
+      assistant,
+      action: "recommend_pois",
+      pois: items,
+      parsed: params.parsed,
+    };
+  } catch (error) {
+    const assistant = await crearMensaje(
+      params.idConversacion,
+      "assistant",
+      "No he podido consultar el recomendador ahora mismo. Prueba de nuevo en unos segundos.",
+    );
+    return {
+      user: params.user,
+      assistant,
+      action: "recommend_error",
+      error: error instanceof Error ? error.message : "error",
+      parsed: params.parsed,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function formatearEventoChat(event: LiveEvent, index: number) {
   const fecha = event.fechaInicio
-    ? new Date(event.fechaInicio).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" })
+    ? new Date(event.fechaInicio).toLocaleString("es-ES", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
     : "fecha pendiente";
   const lugar = [event.recinto, event.ciudad].filter(Boolean).join(" · ");
   return `${index + 1}. ${event.nombre}\n   ${fecha}${lugar ? ` · ${lugar}` : ""}\n   Fuente: ${event.provider}`;
@@ -281,7 +594,10 @@ async function responderBusquedaEventos(params: {
   itinerario?: any;
   fallbackDestino?: string | null;
 }) {
-  const destino = inferirDestinoEventos(params.contenido, params.fallbackDestino ?? params.itinerario?.destino ?? null);
+  const destino = inferirDestinoEventos(
+    params.contenido,
+    params.fallbackDestino ?? params.itinerario?.destino ?? null,
+  );
 
   if (!destino) {
     const assistant = await crearMensaje(
@@ -289,7 +605,12 @@ async function responderBusquedaEventos(params: {
       "assistant",
       "Dime en qué ciudad o destino quieres buscar eventos. Ejemplo: “conciertos en Madrid este fin de semana”.",
     );
-    return { user: params.user, assistant, action: "events_need_destination", eventos: [] };
+    return {
+      user: params.user,
+      assistant,
+      action: "events_need_destination",
+      eventos: [],
+    };
   }
 
   const rango = rangoFechasEventos(params.contenido, params.itinerario);
@@ -297,8 +618,14 @@ async function responderBusquedaEventos(params: {
     city: destino,
     from: rango.from,
     to: rango.to,
-    latitud: params.itinerario?.base_latitud ?? params.itinerario?.base_latitude ?? null,
-    longitud: params.itinerario?.base_longitud ?? params.itinerario?.base_longitude ?? null,
+    latitud:
+      params.itinerario?.base_latitud ??
+      params.itinerario?.base_latitude ??
+      null,
+    longitud:
+      params.itinerario?.base_longitud ??
+      params.itinerario?.base_longitude ??
+      null,
     radiusKm: 35,
   });
 
@@ -307,7 +634,11 @@ async function responderBusquedaEventos(params: {
     ? `He encontrado ${eventos.length} eventos en ${destino} entre ${rango.from} y ${rango.to}:\n\n${eventos.map(formatearEventoChat).join("\n\n")}`
     : `${resultado.message || `No he encontrado eventos relevantes en ${destino} para esas fechas.`}\n\nHe consultado Ticketmaster, PredictHQ y Google Events mediante SerpApi cuando está configurado.`;
 
-  const assistant = await crearMensaje(params.idConversacion, "assistant", texto);
+  const assistant = await crearMensaje(
+    params.idConversacion,
+    "assistant",
+    texto,
+  );
   return {
     user: params.user,
     assistant,
@@ -332,7 +663,9 @@ export default async function chatAccionesRoutes(app: FastifyInstance) {
     const body = request.body as { contenido?: string };
     const contenido = body.contenido?.trim();
     if (!contenido) {
-      return reply.code(400).send({ message: "El contenido del mensaje es obligatorio" });
+      return reply
+        .code(400)
+        .send({ message: "El contenido del mensaje es obligatorio" });
     }
 
     const conversacion = await prisma.conversacion.findUnique({
@@ -348,89 +681,233 @@ export default async function chatAccionesRoutes(app: FastifyInstance) {
     try {
       const itinerario = await cargarItinerarioDeConversacion(idConversacion);
 
-      if (hasEventSearch(contenido)) {
+      // MUY IMPORTANTE: cada mensaje pasa primero por IA/OpenAI si está activo.
+      // Si OpenAI no está configurado o falla, la IA devuelve parser interno y no rompe.
+      const parsed = await llamarParserIA({
+        contenido,
+        conversacion,
+        itinerario,
+        idConversacion,
+      });
+
+      if (parsed.action === "search_events" || hasEventSearch(contenido)) {
         return responderBusquedaEventos({
           idConversacion,
           user,
           contenido,
           itinerario: itinerario ?? undefined,
-          fallbackDestino: conversacion.titulo,
+          fallbackDestino: parsed.destination || conversacion.titulo,
         });
       }
 
       if (!itinerario) {
-        const assistant = await crearMensaje(
+        return recomendarPoisLibres({
           idConversacion,
-          "assistant",
-          "Esta conversación no tiene un itinerario asociado. Puedo recomendarte POIs o eventos sueltos si me dices el destino, o puedes abrir el chat desde un itinerario guardado para modificarlo.",
-        );
-        return { user, assistant, action: "no_itinerary" };
+          user,
+          contenido,
+          parsed,
+          fallbackDestino: parsed.destination || conversacion.titulo,
+        });
       }
 
       const days = getAllDayNumbers(contenido);
 
-      if (hasMove(contenido) && days.length >= 2) {
-        const fromDay = days[0];
-        const toDay = days[1];
-        const poiName = extractRemoveName(contenido);
-        const result = await movePoiBetweenDays(itinerario.id_itinerario, fromDay, toDay, poiName);
+      if (
+        (parsed.action === "move" || hasMove(contenido)) &&
+        (days.length >= 2 || (parsed.fromDayNumber && parsed.toDayNumber))
+      ) {
+        const fromDay = parsed.fromDayNumber ?? days[0];
+        const toDay = parsed.toDayNumber ?? days[1];
+        const poiName =
+          parsed.poiName || parsed.oldPoiName || extractRemoveName(contenido);
+        const result = await movePoiBetweenDays(
+          itinerario.id_itinerario,
+          fromDay,
+          toDay,
+          poiName,
+        );
         const assistant = await crearMensaje(
           idConversacion,
           "assistant",
-          respuestaConDetalle(`He movido ${result.poiName} del día ${fromDay} al día ${toDay}.`, result.itinerario, toDay),
+          respuestaConDetalle(
+            `He movido ${result.poiName} del día ${fromDay} al día ${toDay}.`,
+            result.itinerario,
+            toDay,
+          ),
         );
-        return { user, assistant, action: "move_poi", itinerario: result.itinerario };
+        return {
+          user,
+          assistant,
+          action: "move_poi",
+          itinerario: result.itinerario,
+        };
       }
 
       if (hasSwap(contenido)) {
         const dayNumber = getDayNumberFromText(contenido) ?? 1;
         const positions = extractSwapPositions(contenido);
         if (!positions) {
-          throw new Error("Para intercambiar POIs dime las posiciones. Ejemplo: intercambia la parada 1 y 3 del día 2.");
+          throw new Error(
+            "Para intercambiar POIs dime las posiciones. Ejemplo: intercambia la parada 1 y 3 del día 2.",
+          );
         }
-        const actualizado = await swapPoisInDay(itinerario.id_itinerario, dayNumber, positions.fromIndex, positions.toIndex);
-        const assistant = await crearMensaje(idConversacion, "assistant", respuestaConDetalle(`He cambiado el orden del día ${dayNumber}.`, actualizado, dayNumber));
+        const actualizado = await swapPoisInDay(
+          itinerario.id_itinerario,
+          dayNumber,
+          positions.fromIndex,
+          positions.toIndex,
+        );
+        const assistant = await crearMensaje(
+          idConversacion,
+          "assistant",
+          respuestaConDetalle(
+            `He cambiado el orden del día ${dayNumber}.`,
+            actualizado,
+            dayNumber,
+          ),
+        );
         return { user, assistant, action: "swap_poi", itinerario: actualizado };
       }
 
-      if (hasReplace(contenido)) {
-        const dayNumber = getDayNumberFromText(contenido) ?? 1;
-        const oldPoiName = extractRemoveName(contenido);
-        const query = extractInsertQuery(contenido);
-        const result = await replacePoiInItinerary(itinerario.id_itinerario, dayNumber, { oldPoiName, query });
+      if (
+        parsed.action === "regenerate_day" ||
+        (hasReplace(contenido) && isGenericChange(contenido))
+      ) {
+        const dayNumber =
+          parsed.dayNumber ?? getDayNumberFromText(contenido) ?? 1;
+        const actualizado = await regeneratePartialDay(
+          itinerario.id_itinerario,
+          dayNumber,
+          contenido,
+        );
         const assistant = await crearMensaje(
           idConversacion,
           "assistant",
-          respuestaConDetalle(`He cambiado ${result.oldPoiName} por ${result.poi.nombre} en el día ${dayNumber}.`, result.itinerario, dayNumber),
+          respuestaConDetalle(
+            `He cambiado los POIs del día ${dayNumber} por una nueva selección más coherente.`,
+            actualizado,
+            dayNumber,
+          ),
         );
-        return { user, assistant, action: "replace_poi", itinerario: result.itinerario };
+        return {
+          user,
+          assistant,
+          action: "regenerate_day",
+          itinerario: actualizado,
+          parsed,
+        };
       }
 
-      if (hasRemove(contenido)) {
-        const dayNumber = getDayNumberFromText(contenido) ?? 1;
-        const poiName = extractRemoveName(contenido);
-        const result = await removePoiFromItinerary(itinerario.id_itinerario, dayNumber, poiName);
-        const assistant = await crearMensaje(idConversacion, "assistant", respuestaConDetalle(`He quitado ${result.poiName} del día ${dayNumber}.`, result.itinerario, dayNumber));
-        return { user, assistant, action: "remove_poi", itinerario: result.itinerario };
-      }
-
-      if (hasInsert(contenido)) {
-        const dayNumber = getDayNumberFromText(contenido) ?? 1;
-        const query = extractInsertQuery(contenido);
-        const result = await insertPoiIntoItinerary(itinerario.id_itinerario, dayNumber, { query, poiName: query });
-        const assistant = await crearMensaje(idConversacion, "assistant", respuestaConDetalle(`He añadido ${result.poi.nombre} al día ${dayNumber}.`, result.itinerario, dayNumber));
-        return { user, assistant, action: "insert_poi", itinerario: result.itinerario, poi: result.poi };
-      }
-
-      if (hasRegenerate(contenido)) {
-        const dayNumber = getDayNumberFromText(contenido) ?? 1;
-        const actualizado = await regeneratePartialDay(itinerario.id_itinerario, dayNumber, contenido);
+      if (parsed.action === "replace" || hasReplace(contenido)) {
+        const dayNumber =
+          parsed.dayNumber ?? getDayNumberFromText(contenido) ?? 1;
+        const oldPoiName = parsed.oldPoiName || extractRemoveName(contenido);
+        const query =
+          parsed.query || parsed.poiName || extractInsertQuery(contenido);
+        const result = await replacePoiInItinerary(
+          itinerario.id_itinerario,
+          dayNumber,
+          { oldPoiName, query },
+        );
         const assistant = await crearMensaje(
           idConversacion,
           "assistant",
-          respuestaConDetalle(`He regenerado solo el día ${dayNumber}. El resto del itinerario se mantiene igual.`, actualizado, dayNumber),
+          respuestaConDetalle(
+            `He cambiado ${result.oldPoiName} por ${result.poi.nombre} en el día ${dayNumber}.`,
+            result.itinerario,
+            dayNumber,
+          ),
         );
-        return { user, assistant, action: "regenerate_day", itinerario: actualizado };
+        return {
+          user,
+          assistant,
+          action: "replace_poi",
+          itinerario: result.itinerario,
+          parsed,
+        };
+      }
+
+      if (parsed.action === "remove" || hasRemove(contenido)) {
+        const dayNumber =
+          parsed.dayNumber ?? getDayNumberFromText(contenido) ?? 1;
+        const poiName =
+          parsed.poiName || parsed.oldPoiName || extractRemoveName(contenido);
+        const result = await removePoiFromItinerary(
+          itinerario.id_itinerario,
+          dayNumber,
+          poiName,
+        );
+        const assistant = await crearMensaje(
+          idConversacion,
+          "assistant",
+          respuestaConDetalle(
+            `He quitado ${result.poiName} del día ${dayNumber}.`,
+            result.itinerario,
+            dayNumber,
+          ),
+        );
+        return {
+          user,
+          assistant,
+          action: "remove_poi",
+          itinerario: result.itinerario,
+          parsed,
+        };
+      }
+
+      if (parsed.action === "insert" || hasInsert(contenido)) {
+        const dayNumber =
+          parsed.dayNumber ?? getDayNumberFromText(contenido) ?? 1;
+        const query =
+          parsed.poiName || parsed.query || extractInsertQuery(contenido);
+        const result = await insertPoiIntoItinerary(
+          itinerario.id_itinerario,
+          dayNumber,
+          { query, poiName: query },
+        );
+        const assistant = await crearMensaje(
+          idConversacion,
+          "assistant",
+          respuestaConDetalle(
+            `He añadido ${result.poi.nombre} al día ${dayNumber}.`,
+            result.itinerario,
+            dayNumber,
+          ),
+        );
+        return {
+          user,
+          assistant,
+          action: "insert_poi",
+          itinerario: result.itinerario,
+          poi: result.poi,
+          parsed,
+        };
+      }
+
+      if (parsed.action === "regenerate_day" || hasRegenerate(contenido)) {
+        const dayNumber =
+          parsed.dayNumber ?? getDayNumberFromText(contenido) ?? 1;
+        const actualizado = await regeneratePartialDay(
+          itinerario.id_itinerario,
+          dayNumber,
+          contenido,
+        );
+        const assistant = await crearMensaje(
+          idConversacion,
+          "assistant",
+          respuestaConDetalle(
+            `He regenerado solo el día ${dayNumber}. El resto del itinerario se mantiene igual.`,
+            actualizado,
+            dayNumber,
+          ),
+        );
+        return {
+          user,
+          assistant,
+          action: "regenerate_day",
+          itinerario: actualizado,
+          parsed,
+        };
       }
 
       const assistant = await crearMensaje(
@@ -438,11 +915,20 @@ export default async function chatAccionesRoutes(app: FastifyInstance) {
         "assistant",
         "No he modificado nada porque necesito una orden más concreta. Prueba así: “quita Plaza Mayor del día 2”, “añade 2 POIs al día 3” o “cambia Puerta del Sol del día 2 por otro diferente”.",
       );
-      return { user, assistant, action: "no_action" };
+      return { user, assistant, action: "no_action", parsed };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo aplicar el cambio.";
-      const assistant = await crearMensaje(idConversacion, "assistant", `No he podido modificar el itinerario: ${message}`);
-      return reply.code(200).send({ user, assistant, action: "error", error: message });
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo aplicar el cambio.";
+      const assistant = await crearMensaje(
+        idConversacion,
+        "assistant",
+        `No he podido modificar el itinerario: ${message}`,
+      );
+      return reply
+        .code(200)
+        .send({ user, assistant, action: "error", error: message });
     }
   });
 }

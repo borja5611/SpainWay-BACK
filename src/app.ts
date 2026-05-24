@@ -47,9 +47,17 @@ export async function buildApp() {
     allowedHeaders: ["Content-Type", "Authorization"],
   });
 
-await app.register(jwt, {
-  secret: process.env.JWT_SECRET || "spainway-secret-dev",
-});
+  const jwtSecret = process.env.JWT_SECRET;
+  if (env.NODE_ENV === "production" && !jwtSecret) {
+    throw new Error("JWT_SECRET es obligatorio en producción");
+  }
+  if (env.NODE_ENV === "production" && !process.env.PASSWORD_RESET_SECRET) {
+    throw new Error("PASSWORD_RESET_SECRET es obligatorio en producción");
+  }
+
+  await app.register(jwt, {
+    secret: jwtSecret || "spainway-secret-dev-local",
+  });
 
   await app.register(swagger, {
     openapi: {

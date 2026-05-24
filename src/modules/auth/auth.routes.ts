@@ -19,6 +19,50 @@ function normalizarEmail(value?: string | null): string {
   return (value ?? "").trim().toLowerCase();
 }
 
+function normalizarTelefono(value?: string | null): string | null {
+  const raw = (value ?? "").trim();
+  if (!raw) return null;
+  const cleaned = raw.replace(/[^+0-9]/g, "");
+  return cleaned.length >= 6 ? cleaned : null;
+}
+
+function esNombreUsuarioValido(value: string): boolean {
+  return /^[a-zA-Z0-9._-]{3,30}$/.test(value);
+}
+
+async function comprobarDisponibilidad(params: {
+  email?: string | null;
+  nombre_usuario?: string | null;
+  telefono?: string | null;
+}) {
+  const email = normalizarEmail(params.email);
+  const nombreUsuario = (params.nombre_usuario ?? "").trim().toLowerCase();
+  const telefono = normalizarTelefono(params.telefono);
+
+  const [emailExistente, usuarioExistente, telefonoExistente] = await Promise.all([
+    email ? prisma.usuario.findUnique({ where: { email }, select: { id_usuario: true } }) : null,
+    nombreUsuario
+      ? prisma.usuario.findFirst({ where: { nombre_usuario: nombreUsuario }, select: { id_usuario: true } })
+      : null,
+    telefono
+      ? prisma.usuario.findFirst({ where: { telefono }, select: { id_usuario: true } })
+      : null,
+  ]);
+
+  return {
+    email: { value: email, available: Boolean(email) && !emailExistente },
+    nombre_usuario: {
+      value: nombreUsuario,
+      available: Boolean(nombreUsuario) && esNombreUsuarioValido(nombreUsuario) && !usuarioExistente,
+    },
+    telefono: {
+      value: telefono,
+      available: !telefono || !telefonoExistente,
+    },
+  };
+}
+
+
 function hashCodigoReset(email: string, codigo: string): string {
   const secret = process.env.PASSWORD_RESET_SECRET ?? "spainway_reset_secret_dev";
 
@@ -83,6 +127,24 @@ async function generarNombreUsuarioUnico(base: string) {
 }
 
 export default async function authRoutes(app: FastifyInstance) {
+
+  app.get("/availability", async (request, reply) => {
+    const query = request.query as {
+      email?: string;
+      nombre_usuario?: string;
+      username?: string;
+      telefono?: string;
+    };
+
+    const resultado = await comprobarDisponibilidad({
+      email: query.email,
+      nombre_usuario: query.nombre_usuario ?? query.username,
+      telefono: query.telefono,
+    });
+
+    return reply.send(resultado);
+  });
+
   app.post("/register", async (request, reply) => {
     const body = request.body as {
       nombre: string;
@@ -103,21 +165,28 @@ export default async function authRoutes(app: FastifyInstance) {
 
     const email = body.email.trim().toLowerCase();
     const nombreUsuario = body.nombre_usuario.trim().toLowerCase();
+    const telefono = normalizarTelefono(body.telefono);
 
-    const existeEmail = await prisma.usuario.findUnique({
-      where: { email },
+    if (!esNombreUsuarioValido(nombreUsuario)) {
+      return reply.code(400).send({ message: "El nombre de usuario debe tener entre 3 y 30 caracteres y solo puede usar letras, números, punto, guion o guion bajo" });
+    }
+
+    const disponibilidad = await comprobarDisponibilidad({
+      email,
+      nombre_usuario: nombreUsuario,
+      telefono,
     });
 
-    if (existeEmail) {
+    if (!disponibilidad.email.available) {
       return reply.code(409).send({ message: "El email ya está registrado" });
     }
 
-    const existeUsuario = await prisma.usuario.findFirst({
-      where: { nombre_usuario: nombreUsuario },
-    });
-
-    if (existeUsuario) {
+    if (!disponibilidad.nombre_usuario.available) {
       return reply.code(409).send({ message: "El nombre de usuario ya está en uso" });
+    }
+
+    if (telefono && !disponibilidad.telefono.available) {
+      return reply.code(409).send({ message: "El teléfono ya está asociado a otra cuenta" });
     }
 
     const passwordHash = await bcrypt.hash(body.password, 10);
@@ -128,7 +197,7 @@ export default async function authRoutes(app: FastifyInstance) {
         nombre_usuario: nombreUsuario,
         email,
         contrasena: passwordHash,
-        telefono: body.telefono?.trim() || null,
+        telefono,
         rol: "user",
         creado: new Date(),
         actualizado: new Date(),

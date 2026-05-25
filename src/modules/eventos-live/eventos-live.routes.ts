@@ -3,7 +3,7 @@ import axios from "axios";
 import { prisma } from "../../lib/prisma";
 import { env } from "../../config/env";
 
-export type LiveEventProvider = "ticketmaster" | "predicthq" | "serpapi";
+type LiveEventProvider = "ticketmaster" | "predicthq" | "serpapi" | "google_local" | "google_maps";
 
 export type LiveEvent = {
   id: string;
@@ -94,30 +94,32 @@ type PredictHQResponse = {
   results?: PredictHQEvent[];
 };
 
-type SerpApiGoogleEvent = {
+type SerpApiEvent = {
   title?: string;
   description?: string;
   link?: string;
   thumbnail?: string;
-  address?: string[];
-  venue?: {
-    name?: string;
-    link?: string;
-  };
-  date?: {
-    when?: string;
-    start_date?: string;
-    start_time?: string;
-  };
-  ticket_info?: Array<{
-    source?: string;
-    link?: string;
-    link_type?: string;
-  }>;
+  date?: { start_date?: string; when?: string };
+  venue?: { name?: string; address?: string[] | string };
+  address?: string[] | string;
+  ticket_info?: Array<{ link?: string }>;
 };
 
-type SerpApiResponse = {
-  events_results?: SerpApiGoogleEvent[];
+type SerpApiLocalPlace = {
+  title?: string;
+  place_id?: string;
+  data_id?: string;
+  gps_coordinates?: { latitude?: number; longitude?: number };
+  rating?: number;
+  reviews?: number;
+  type?: string;
+  types?: string[];
+  address?: string;
+  description?: string;
+  thumbnail?: string;
+  website?: string;
+  phone?: string;
+  hours?: string;
 };
 
 type SearchAttempt = {
@@ -128,6 +130,48 @@ type SearchAttempt = {
   radiusKm: number;
   useCityForTicketmaster: boolean;
   useCityForPredictHQ: boolean;
+};
+
+type EventosLiveAgregadoResponse = {
+  city: string;
+  from: string;
+  to: string;
+  coordenadas: {
+    latitud: number | null;
+    longitud: number | null;
+  };
+  search_strategy: {
+    success_attempt: string | null;
+    success_label: string | null;
+    requested_radius_km: number;
+    used_from: string | null;
+    used_to: string | null;
+    used_radius_km: number | null;
+    attempted: Array<{
+      code: string;
+      label: string;
+      from: string;
+      to: string;
+      radiusKm: number;
+      ticketmaster: number;
+      predicthq: number;
+      serpapi: number;
+      google_local?: number;
+      google_maps?: number;
+      total: number;
+    }>;
+  };
+  message: string;
+  providers: {
+    ticketmaster: number;
+    predicthq: number;
+    serpapi: number;
+    google_local?: number;
+    google_maps?: number;
+  };
+  total: number;
+  events: LiveEvent[];
+  warnings: string[];
 };
 
 function toNumber(value: unknown): number | null {
@@ -191,6 +235,12 @@ function getLocalYmdMadrid(value?: string | null): string | null {
 
   if (!year || !month || !day) return null;
   return `${year}-${month}-${day}`;
+}
+
+function parseSerpAddress(value: unknown): string | null {
+  if (Array.isArray(value)) return value.filter(Boolean).join(", ") || null;
+  if (typeof value === "string") return value.trim() || null;
+  return null;
 }
 
 function pickBestImage(images: TicketmasterImage[] | undefined): string | null {
@@ -284,48 +334,27 @@ function mapPredictHQEvent(event: PredictHQEvent, city: string): LiveEvent {
   };
 }
 
-function parseSerpApiDate(event: SerpApiGoogleEvent): string {
-  const startDate = event.date?.start_date?.trim();
-  const startTime = event.date?.start_time?.trim();
-
-  if (startDate) {
-    const dateParts = startDate.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (dateParts) return `${dateParts[1]}-${dateParts[2]}-${dateParts[3]}T${startTime || "20:00:00"}`;
-
-    const parsed = new Date(`${startDate} ${startTime || "20:00"}`);
-    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
-  }
-
-  const when = event.date?.when?.trim();
-  if (when) {
-    const parsed = new Date(when);
-    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
-  }
-
-  return "";
-}
-
-function mapSerpApiEvent(event: SerpApiGoogleEvent, city: string, index: number): LiveEvent {
-  const address = Array.isArray(event.address) ? event.address.filter(Boolean).join(", ") : null;
-  const ticketUrl = event.ticket_info?.find((item) => item.link)?.link ?? null;
-  const venueName = event.venue?.name?.trim() || null;
+function mapSerpApiEvent(event: SerpApiEvent, city: string, index: number): LiveEvent {
+  const start = event.date?.start_date
+    ? `${event.date.start_date}T20:00:00`
+    : event.date?.when ?? "";
 
   return {
-    id: `serpapi_${normalizarTexto(`${event.title ?? "evento"}_${parseSerpApiDate(event)}_${venueName ?? city}_${index}`).replace(/\s+/g, "_").slice(0, 120)}`,
+    id: `serpapi_${normalizarTexto(event.title ?? "evento").replace(/\s+/g, "_")}_${index}`,
     provider: "serpapi",
     nombre: event.title?.trim() || "Evento Google Events",
     descripcion: event.description?.trim() || null,
-    categoria: "Evento",
-    fechaInicio: parseSerpApiDate(event),
+    categoria: "Evento local",
+    fechaInicio: start,
     fechaFin: null,
     ciudad: city,
-    recinto: venueName,
-    direccion: address,
+    recinto: event.venue?.name?.trim() || null,
+    direccion: parseSerpAddress(event.venue?.address) ?? parseSerpAddress(event.address),
     latitud: null,
     longitud: null,
     imagen: event.thumbnail?.trim() || null,
-    url: ticketUrl || event.link?.trim() || event.venue?.link?.trim() || null,
-    score: 78,
+    url: event.link?.trim() || event.ticket_info?.[0]?.link?.trim() || null,
+    score: 80,
   };
 }
 
@@ -357,7 +386,13 @@ function esCategoriaPermitida(categoria: string): boolean {
     c.includes("sports") ||
     c.includes("community") ||
     c.includes("expo") ||
-    c.includes("evento")
+    c.includes("evento") ||
+    c.includes("plan local") ||
+    c.includes("ocio local") ||
+    c.includes("discoteca") ||
+    c.includes("club") ||
+    c.includes("flamenco") ||
+    c.includes("jazz")
   );
 }
 
@@ -443,6 +478,7 @@ function scoreCategoriaEvento(event: LiveEvent): number {
   if (c.includes("sports")) return 8;
   if (c.includes("community")) return 6;
   if (c.includes("expo")) return 4;
+  if (c.includes("evento")) return 4;
   return 0;
 }
 
@@ -463,6 +499,10 @@ function esEventoDebil(event: LiveEvent) {
   const tieneCalidadMinima =
     Boolean(event.recinto) || Boolean(event.url) || Boolean(event.imagen);
 
+  if (event.provider === "google_local" || event.provider === "google_maps") {
+    return Number(event.score ?? 0) < 76;
+  }
+
   return !tieneCalidadMinima && scoreCategoriaEvento(event) < 8;
 }
 
@@ -480,9 +520,7 @@ function deduplicarEventos(events: LiveEvent[]) {
       const fechaSaved = getLocalYmdMadrid(saved.fechaInicio) ?? "";
       const sameDay = fechaLocal === fechaSaved;
       const venueSaved = normalizarTexto(saved.recinto ?? "");
-      const sameVenue =
-        venue && venueSaved ? venue === venueSaved : false;
-
+      const sameVenue = venue && venueSaved ? venue === venueSaved : false;
       const titleSimilar = sonTitulosParecidos(event.nombre, saved.nombre);
 
       return sameDay && (sameVenue || titleSimilar);
@@ -639,38 +677,216 @@ async function fetchPredictHQEvents(params: {
   }
 }
 
+
+type EventosCategoria =
+  | "all"
+  | "music"
+  | "theatre"
+  | "festivals"
+  | "local_fairs"
+  | "nightlife"
+  | "free"
+  | "gastronomy"
+  | "family";
+
+const HIGH_QUALITY_NIGHTLIFE_TERMS = [
+  "flamenco", "tablao", "jazz", "música en directo", "musica en directo",
+  "rooftop", "terraza", "coctelería", "cocteleria", "cocktail",
+  "club", "sala", "conciertos", "live music", "dj", "discoteca",
+  "pub", "lounge", "azotea", "vermut", "tapas"
+];
+
+const LOW_QUALITY_LOCAL_TERMS = [
+  "supermercado", "gasolinera", "estanco", "parking", "aparcamiento",
+  "hotel", "hostal", "residencia", "tienda", "peluqueria", "farmacia", "banco"
+];
+
+function normalizarCategoriaEventos(value?: string | null): EventosCategoria {
+  const c = normalizarTexto(value ?? "all");
+  if (c.includes("night") || c.includes("noche") || c.includes("discoteca") || c.includes("club") || c.includes("ocio")) return "nightlife";
+  if (c.includes("fiesta") || c.includes("feria") || c.includes("verbena") || c.includes("local")) return "local_fairs";
+  if (c.includes("music") || c.includes("concierto") || c.includes("musica") || c.includes("música")) return "music";
+  if (c.includes("teatro") || c.includes("theatre") || c.includes("theater") || c.includes("monologo") || c.includes("monólogo")) return "theatre";
+  if (c.includes("festival")) return "festivals";
+  if (c.includes("gratis") || c.includes("free")) return "free";
+  if (c.includes("gastr") || c.includes("food") || c.includes("tapas")) return "gastronomy";
+  if (c.includes("familia") || c.includes("family") || c.includes("niños") || c.includes("ninos")) return "family";
+  return "all";
+}
+
+function esCategoriaPlanesLocales(category?: string | null) {
+  const c = normalizarCategoriaEventos(category);
+  return c === "all" || c === "nightlife" || c === "local_fairs" || c === "gastronomy";
+}
+
+function buildGoogleEventsKeyword(city: string, category?: string | null): string {
+  const c = normalizarCategoriaEventos(category);
+  if (c === "nightlife") return `mejores planes nocturnos conciertos pequeños música en directo discotecas premium en ${city}`;
+  if (c === "local_fairs") return `fiestas locales ferias verbenas agenda cultural en ${city}`;
+  if (c === "music") return `conciertos música en directo en ${city}`;
+  if (c === "theatre") return `teatro monólogos espectáculos en ${city}`;
+  if (c === "festivals") return `festivales en ${city}`;
+  if (c === "free") return `eventos gratis planes gratis en ${city}`;
+  if (c === "gastronomy") return `eventos gastronómicos tapas mercados food en ${city}`;
+  if (c === "family") return `eventos familiares planes con niños en ${city}`;
+  return `conciertos teatro festivales fiestas locales agenda cultural mejores planes en ${city}`;
+}
+
+function buildLocalPlanQueries(city: string, category?: string | null): string[] {
+  const c = normalizarCategoriaEventos(category);
+  if (c === "nightlife") {
+    return [
+      `mejores planes nocturnos en ${city}`,
+      `discotecas mejor valoradas en ${city}`,
+      `bares con música en directo en ${city}`,
+      `rooftop cocktail bar en ${city}`,
+      `tablao flamenco jazz club en ${city}`,
+    ];
+  }
+  if (c === "local_fairs") return [`fiestas locales en ${city}`, `ferias y verbenas en ${city}`, `agenda cultural local en ${city}`];
+  if (c === "gastronomy") return [`mercados gastronómicos en ${city}`, `bares de tapas con ambiente en ${city}`, `experiencias gastronómicas en ${city}`];
+  return [`mejores planes nocturnos en ${city}`, `bares con música en directo en ${city}`, `fiestas locales agenda cultural en ${city}`];
+}
+
+function scoreLocalPlace(place: SerpApiLocalPlace, query: string): number {
+  const rating = toNumber(place.rating) ?? 0;
+  const reviews = toNumber(place.reviews) ?? 0;
+  const text = normalizarTexto(`${place.title ?? ""} ${place.type ?? ""} ${(place.types ?? []).join(" ")} ${query}`);
+  let score = 55;
+  if (rating >= 4.7) score += 30;
+  else if (rating >= 4.5) score += 24;
+  else if (rating >= 4.3) score += 16;
+  else if (rating >= 4.1) score += 8;
+  else if (rating > 0 && rating < 4.0) score -= 35;
+  if (reviews >= 1200) score += 22;
+  else if (reviews >= 500) score += 18;
+  else if (reviews >= 180) score += 12;
+  else if (reviews >= 60) score += 6;
+  else if (reviews > 0 && reviews < 25) score -= 12;
+  if (HIGH_QUALITY_NIGHTLIFE_TERMS.some((term) => text.includes(term))) score += 18;
+  if (place.thumbnail) score += 6;
+  if (place.website) score += 5;
+  if (place.gps_coordinates?.latitude && place.gps_coordinates?.longitude) score += 5;
+  return score;
+}
+
+function esPlanLocalDeCalidad(place: SerpApiLocalPlace, query: string): boolean {
+  const text = normalizarTexto(`${place.title ?? ""} ${place.type ?? ""} ${(place.types ?? []).join(" ")} ${place.address ?? ""}`);
+  if (!place.title?.trim()) return false;
+  if (LOW_QUALITY_LOCAL_TERMS.some((term) => text.includes(term))) return false;
+  const rating = toNumber(place.rating);
+  const reviews = toNumber(place.reviews);
+  const hasKeyword = HIGH_QUALITY_NIGHTLIFE_TERMS.some((term) => text.includes(term) || normalizarTexto(query).includes(term));
+  if (hasKeyword && (rating === null || rating >= 4.0) && (reviews === null || reviews >= 20)) return true;
+  if ((rating ?? 0) >= 4.3 && (reviews ?? 0) >= 80) return true;
+  if ((rating ?? 0) >= 4.1 && (reviews ?? 0) >= 250) return true;
+  return false;
+}
+
+function mapSerpApiLocalPlace(place: SerpApiLocalPlace, city: string, provider: "google_local" | "google_maps", query: string, index: number): LiveEvent {
+  const categoria = place.type || place.types?.[0] || "Plan local";
+  const rating = toNumber(place.rating);
+  const reviews = toNumber(place.reviews);
+  const descripcion = [
+    place.description?.trim(),
+    rating ? `${rating.toFixed(1)}★` : null,
+    reviews ? `${reviews} reseñas` : null,
+    place.hours ? `Horario: ${place.hours}` : null,
+  ].filter(Boolean).join(" · ") || `Plan local seleccionado para ${city}.`;
+  const url = place.website?.trim() || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${place.title ?? query} ${city}`)}`;
+  return {
+    id: `${provider}_${normalizarTexto(`${place.place_id || place.data_id || place.title || query}_${index}`).replace(/\s+/g, "_").slice(0, 140)}`,
+    provider,
+    nombre: place.title?.trim() || "Plan local",
+    descripcion,
+    categoria: provider === "google_maps" ? `Plan local · ${categoria}` : `Ocio local · ${categoria}`,
+    fechaInicio: new Date().toISOString(),
+    fechaFin: null,
+    ciudad: city,
+    recinto: place.title?.trim() || null,
+    direccion: place.address?.trim() || null,
+    latitud: toNumber(place.gps_coordinates?.latitude),
+    longitud: toNumber(place.gps_coordinates?.longitude),
+    imagen: place.thumbnail?.trim() || null,
+    url,
+    score: scoreLocalPlace(place, query),
+  };
+}
+
 async function fetchSerpApiEvents(params: {
   city: string;
   from: string;
   to: string;
-  keyword?: string | null;
+  category?: string | null;
 }): Promise<LiveEvent[]> {
-  if (!process.env.SERPAPI_API_KEY) return [];
+  if (!env.SERPAPI_API_KEY) return [];
 
   try {
-    const keyword = params.keyword?.trim() || "eventos conciertos teatro festivales";
-    const q = `${keyword} en ${params.city} entre ${params.from} y ${params.to}`;
-
-    const response = await axios.get<SerpApiResponse>(
-      "https://serpapi.com/search.json",
-      {
-        params: {
-          engine: "google_events",
-          q,
-          hl: "es",
-          gl: "es",
-          api_key: process.env.SERPAPI_API_KEY,
-        },
-        timeout: Number(process.env.EVENTS_LIVE_TIMEOUT_MS || 7000),
+    const keyword = buildGoogleEventsKeyword(params.city, params.category);
+    const q = `${keyword} del ${params.from} al ${params.to}`;
+    const response = await axios.get("https://serpapi.com/search.json", {
+      params: {
+        engine: "google_events",
+        q,
+        hl: "es",
+        gl: "es",
+        api_key: env.SERPAPI_API_KEY,
       },
-    );
+      timeout: env.EVENTS_LIVE_TIMEOUT_MS,
+    });
 
-    const events = response.data.events_results ?? [];
-    return events.map((event, index) => mapSerpApiEvent(event, params.city, index));
+    const events = Array.isArray(response.data?.events_results)
+      ? response.data.events_results
+      : [];
+
+    return events.map((event: SerpApiEvent, index: number) =>
+      mapSerpApiEvent(event, params.city, index),
+    );
   } catch (error) {
     console.error("Error SerpApi Google Events:", error);
     return [];
   }
+}
+
+
+async function fetchSerpApiLocalPlans(params: {
+  city: string;
+  category?: string | null;
+  provider: "google_local" | "google_maps";
+}): Promise<LiveEvent[]> {
+  if (!env.SERPAPI_API_KEY) return [];
+  if (!esCategoriaPlanesLocales(params.category)) return [];
+
+  const queries = buildLocalPlanQueries(params.city, params.category);
+  const results: LiveEvent[] = [];
+
+  for (const query of queries) {
+    try {
+      const response = await axios.get("https://serpapi.com/search.json", {
+        params: {
+          engine: params.provider === "google_maps" ? "google_maps" : "google_local",
+          q: query,
+          hl: "es",
+          gl: "es",
+          api_key: env.SERPAPI_API_KEY,
+        },
+        timeout: env.EVENTS_LIVE_TIMEOUT_MS,
+      });
+
+      const localResults: SerpApiLocalPlace[] = Array.isArray(response.data?.local_results)
+        ? response.data.local_results
+        : [];
+      const placeResults: SerpApiLocalPlace[] = response.data?.place_results ? [response.data.place_results] : [];
+      const places = [...localResults, ...placeResults]
+        .filter((place) => esPlanLocalDeCalidad(place, query))
+        .map((place, index) => mapSerpApiLocalPlace(place, params.city, params.provider, query, index));
+      results.push(...places);
+    } catch (error) {
+      console.error(`Error SerpApi ${params.provider}:`, error);
+    }
+  }
+
+  return results;
 }
 
 async function executeAttempt(params: {
@@ -678,9 +894,9 @@ async function executeAttempt(params: {
   latitud: number | null;
   longitud: number | null;
   attempt: SearchAttempt;
-  keyword?: string | null;
+  category?: string | null;
 }) {
-  const [ticketmasterResult, predictHQResult, serpApiResult] = await Promise.allSettled([
+  const [ticketmasterEvents, predictHQEvents, serpApiEvents, googleLocalEvents, googleMapsEvents] = await Promise.all([
     fetchTicketmasterEvents({
       city: params.city,
       from: params.attempt.from,
@@ -703,21 +919,23 @@ async function executeAttempt(params: {
       city: params.city,
       from: params.attempt.from,
       to: params.attempt.to,
-      keyword: params.keyword,
+      category: params.category,
     }),
+    fetchSerpApiLocalPlans({ city: params.city, category: params.category, provider: "google_local" }),
+    fetchSerpApiLocalPlans({ city: params.city, category: params.category, provider: "google_maps" }),
   ]);
 
-  const ticketmasterEvents = ticketmasterResult.status === "fulfilled" ? ticketmasterResult.value : [];
-  const predictHQEvents = predictHQResult.status === "fulfilled" ? predictHQResult.value : [];
-  const serpApiEvents = serpApiResult.status === "fulfilled" ? serpApiResult.value : [];
-
-  const merged = enriquecerYFiltrarEventos(
-    filtrarPorFechas(
-      [...ticketmasterEvents, ...predictHQEvents, ...serpApiEvents],
-      params.attempt.from,
-      params.attempt.to,
-    ),
+  const datedEvents = filtrarPorFechas(
+    [...ticketmasterEvents, ...predictHQEvents, ...serpApiEvents],
+    params.attempt.from,
+    params.attempt.to,
   );
+
+  const merged = enriquecerYFiltrarEventos([
+    ...datedEvents,
+    ...googleLocalEvents,
+    ...googleMapsEvents,
+  ]);
 
   return {
     events: merged,
@@ -725,6 +943,8 @@ async function executeAttempt(params: {
       ticketmaster: ticketmasterEvents.length,
       predicthq: predictHQEvents.length,
       serpapi: serpApiEvents.length,
+      google_local: googleLocalEvents.length,
+      google_maps: googleMapsEvents.length,
     },
   };
 }
@@ -790,35 +1010,62 @@ function buildZeroMessage(city: string, from: string, to: string) {
   return `No encontramos eventos turísticos útiles para ${city} entre ${from} y ${to}, ni siquiera ampliando radio y días cercanos.`;
 }
 
+function buildWarnings(): string[] {
+  const warnings: string[] = [];
+
+  if (!env.TICKETMASTER_API_KEY) {
+    warnings.push("Ticketmaster no está configurado.");
+  }
+
+  if (!env.PREDICTHQ_API_KEY) {
+    warnings.push("PredictHQ no está configurado.");
+  }
+
+  if (!env.SERPAPI_API_KEY) {
+    warnings.push("SerpApi no está configurado.");
+  }
+
+  return warnings;
+}
 
 export async function buscarEventosLiveAgregado(params: {
   city: string;
   from: string;
   to: string;
-  latitud?: number | null;
-  longitud?: number | null;
+  lat?: number | null;
+  lng?: number | null;
   radiusKm?: number | null;
   category?: string | null;
-}) {
+}): Promise<EventosLiveAgregadoResponse> {
   const city = params.city.trim();
   const from = params.from.trim();
   const to = params.to.trim();
 
   if (!city || !from || !to) {
     return {
-      ok: false,
       city,
       from,
       to,
+      coordenadas: { latitud: null, longitud: null },
+      search_strategy: {
+        success_attempt: null,
+        success_label: null,
+        requested_radius_km: 0,
+        used_from: null,
+        used_to: null,
+        used_radius_km: null,
+        attempted: [],
+      },
       message: "Parámetros obligatorios: city, from, to",
-      providers: { ticketmaster: 0, predicthq: 0, serpapi: 0 },
+      providers: { ticketmaster: 0, predicthq: 0, serpapi: 0, google_local: 0, google_maps: 0 },
       total: 0,
-      events: [] as LiveEvent[],
+      events: [],
+      warnings: ["Parámetros obligatorios: city, from, to"],
     };
   }
 
-  let latitud = params.latitud ?? null;
-  let longitud = params.longitud ?? null;
+  let latitud = params.lat ?? null;
+  let longitud = params.lng ?? null;
 
   if (latitud === null || longitud === null) {
     const coords = await resolverCoordenadasCiudad(city);
@@ -827,26 +1074,24 @@ export async function buscarEventosLiveAgregado(params: {
   }
 
   const requestedRadiusKm = clamp(
-    toNumber(params.radiusKm) ?? env.PREDICTHQ_RADIUS_KM,
+    params.radiusKm ?? env.PREDICTHQ_RADIUS_KM,
     20,
     80,
   );
 
   const attempts = buildAttempts(from, to, requestedRadiusKm);
-  const tried: Array<{
-    code: string;
-    label: string;
-    from: string;
-    to: string;
-    radiusKm: number;
-    ticketmaster: number;
-    predicthq: number;
-    serpapi: number;
-    total: number;
-  }> = [];
+  const warnings = buildWarnings();
+
+  const tried: EventosLiveAgregadoResponse["search_strategy"]["attempted"] = [];
 
   for (const attempt of attempts) {
-    const result = await executeAttempt({ city, latitud, longitud, attempt, keyword: params.category });
+    const result = await executeAttempt({
+      city,
+      latitud,
+      longitud,
+      attempt,
+      category: params.category ?? null,
+    });
 
     tried.push({
       code: attempt.code,
@@ -857,16 +1102,20 @@ export async function buscarEventosLiveAgregado(params: {
       ticketmaster: result.providers.ticketmaster,
       predicthq: result.providers.predicthq,
       serpapi: result.providers.serpapi,
+      google_local: result.providers.google_local,
+      google_maps: result.providers.google_maps,
       total: result.events.length,
     });
 
     if (result.events.length > 0) {
       return {
-        ok: true,
         city,
         from,
         to,
-        coordenadas: { latitud, longitud },
+        coordenadas: {
+          latitud,
+          longitud,
+        },
         search_strategy: {
           success_attempt: attempt.code,
           success_label: attempt.label,
@@ -879,17 +1128,20 @@ export async function buscarEventosLiveAgregado(params: {
         message: buildSuccessMessage(city, attempt, from, to),
         providers: result.providers,
         total: result.events.length,
-        events: result.events.slice(0, env.EVENTS_LIVE_MAX_RESULTS),
+        events: result.events,
+        warnings,
       };
     }
   }
 
   return {
-    ok: true,
     city,
     from,
     to,
-    coordenadas: { latitud, longitud },
+    coordenadas: {
+      latitud,
+      longitud,
+    },
     search_strategy: {
       success_attempt: null,
       success_label: null,
@@ -900,9 +1152,14 @@ export async function buscarEventosLiveAgregado(params: {
       attempted: tried,
     },
     message: buildZeroMessage(city, from, to),
-    providers: { ticketmaster: 0, predicthq: 0, serpapi: 0 },
+    providers: {
+      ticketmaster: 0,
+      predicthq: 0,
+      serpapi: 0,
+    },
     total: 0,
-    events: [] as LiveEvent[],
+    events: [],
+    warnings,
   };
 }
 
@@ -943,108 +1200,17 @@ export default async function eventosLiveRoutes(app: FastifyInstance) {
       });
     }
 
-    let latitud = toNumber(query.lat);
-    let longitud = toNumber(query.lng);
-
-    if (latitud === null || longitud === null) {
-      const coords = await resolverCoordenadasCiudad(city);
-      latitud = coords.latitud;
-      longitud = coords.longitud;
-    }
-
-    const requestedRadiusKm = clamp(
-      toNumber(query.radiusKm) ?? env.PREDICTHQ_RADIUS_KM,
-      20,
-      80,
-    );
-
-    const attempts = buildAttempts(from, to, requestedRadiusKm);
-
-    const tried: Array<{
-      code: string;
-      label: string;
-      from: string;
-      to: string;
-      radiusKm: number;
-      ticketmaster: number;
-      predicthq: number;
-      serpapi: number;
-      total: number;
-    }> = [];
-
-    for (const attempt of attempts) {
-      const result = await executeAttempt({
-        city,
-        latitud,
-        longitud,
-        attempt,
-        keyword: query.category,
-      });
-
-      tried.push({
-        code: attempt.code,
-        label: attempt.label,
-        from: attempt.from,
-        to: attempt.to,
-        radiusKm: attempt.radiusKm,
-        ticketmaster: result.providers.ticketmaster,
-        predicthq: result.providers.predicthq,
-        serpapi: result.providers.serpapi,
-        total: result.events.length,
-      });
-
-      if (result.events.length > 0) {
-        return reply.send({
-          city,
-          from,
-          to,
-          coordenadas: {
-            latitud,
-            longitud,
-          },
-          search_strategy: {
-            success_attempt: attempt.code,
-            success_label: attempt.label,
-            requested_radius_km: requestedRadiusKm,
-            used_from: attempt.from,
-            used_to: attempt.to,
-            used_radius_km: attempt.radiusKm,
-            attempted: tried,
-          },
-          message: buildSuccessMessage(city, attempt, from, to),
-          providers: result.providers,
-          total: result.events.length,
-          events: result.events,
-        });
-      }
-    }
-
-    return reply.send({
+    const result = await buscarEventosLiveAgregado({
       city,
       from,
       to,
-      coordenadas: {
-        latitud,
-        longitud,
-      },
-      search_strategy: {
-        success_attempt: null,
-        success_label: null,
-        requested_radius_km: requestedRadiusKm,
-        used_from: null,
-        used_to: null,
-        used_radius_km: null,
-        attempted: tried,
-      },
-      message: buildZeroMessage(city, from, to),
-      providers: {
-        ticketmaster: 0,
-        predicthq: 0,
-        serpapi: 0,
-      },
-      total: 0,
-      events: [],
+      lat: toNumber(query.lat),
+      lng: toNumber(query.lng),
+      radiusKm: toNumber(query.radiusKm),
+      category: query.category ?? null,
     });
+
+    return reply.send(result);
   });
 
   app.get("/selecciones/:idItinerario", async (request, reply) => {

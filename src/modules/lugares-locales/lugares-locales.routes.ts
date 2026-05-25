@@ -266,6 +266,42 @@ async function fetchJson(url: URL, timeoutMs: number): Promise<unknown> {
   }
 }
 
+
+const CIUDADES_LOCAL_SERPAPI = [
+  "Madrid", "Barcelona", "Valencia", "Sevilla", "Málaga", "Granada", "Córdoba",
+  "Bilbao", "San Sebastián", "Santander", "Oviedo", "Gijón", "Zaragoza", "Toledo",
+  "Alicante", "Murcia", "Palma de Mallorca", "Ibiza", "Tenerife", "Las Palmas de Gran Canaria",
+  "Santiago de Compostela", "A Coruña", "Vigo", "Cádiz", "Huelva", "Almería",
+  "Logroño", "Pamplona", "Cáceres", "Mérida", "Valladolid", "Salamanca",
+  "Segovia", "Cuenca", "Girona", "Tarragona", "Lleida"
+];
+
+function normalizarCiudadLocal(input: string): string {
+  const raw = clean(input) ?? "";
+  const partes = raw.split(",").map((p) => p.trim()).filter(Boolean);
+  const candidatas = [...partes].reverse().concat(raw);
+
+  for (const candidata of candidatas) {
+    const key = normalizarTexto(candidata);
+    const match = CIUDADES_LOCAL_SERPAPI.find((ciudad) => normalizarTexto(ciudad) === key);
+    if (match) return match;
+  }
+
+  const alias: Record<string, string> = {
+    "cataluna barcelona": "Barcelona",
+    "barcelona barcelona": "Barcelona",
+    "madrid madrid": "Madrid",
+    "comunidad valenciana valencia": "Valencia",
+    "valencia valencia": "Valencia",
+    "baleares mallorca": "Palma de Mallorca",
+    "islas baleares mallorca": "Palma de Mallorca",
+    "canarias tenerife": "Tenerife",
+  };
+
+  const key = normalizarTexto(raw);
+  return alias[key] ?? raw.replace(/,\s*espana$/i, "").replace(/,\s*españa$/i, "").trim();
+}
+
 async function buscarGoogleLocal(params: {
   ciudad: string;
   tipo: TipoLocal;
@@ -277,8 +313,7 @@ async function buscarGoogleLocal(params: {
 
   const url = new URL("https://serpapi.com/search.json");
   url.searchParams.set("engine", "google_local");
-  url.searchParams.set("q", tipoToQuery(params.tipo, params.ciudad));
-  url.searchParams.set("location", `${params.ciudad}, España`);
+  url.searchParams.set("q", `${tipoToQuery(params.tipo, normalizarCiudadLocal(params.ciudad))} España`);
   url.searchParams.set("google_domain", "google.es");
   url.searchParams.set("gl", "es");
   url.searchParams.set("hl", "es");
@@ -299,7 +334,7 @@ async function buscarGoogleLocal(params: {
           nombre: clean(item.title ?? item.name) ?? "Restaurante",
           categoria: clean(item.type ?? item.category) ?? categoriaFromTipo(params.tipo),
           direccion: parseAddress(item.address),
-          ciudad: params.ciudad,
+          ciudad: normalizarCiudadLocal(params.ciudad),
           latitud: gps.lat,
           longitud: gps.lon,
           rating: toNumber(item.rating),
@@ -339,7 +374,7 @@ async function buscarGoogleMaps(params: {
   const url = new URL("https://serpapi.com/search.json");
   url.searchParams.set("engine", "google_maps");
   url.searchParams.set("type", "search");
-  url.searchParams.set("q", tipoToQuery(params.tipo, params.ciudad));
+  url.searchParams.set("q", `${tipoToQuery(params.tipo, normalizarCiudadLocal(params.ciudad))} España`);
   url.searchParams.set("google_domain", "google.es");
   url.searchParams.set("gl", "es");
   url.searchParams.set("hl", "es");
@@ -363,7 +398,7 @@ async function buscarGoogleMaps(params: {
           nombre: clean(item.title ?? item.name) ?? "Restaurante",
           categoria: clean(item.type ?? item.category) ?? categoriaFromTipo(params.tipo),
           direccion: parseAddress(item.address),
-          ciudad: params.ciudad,
+          ciudad: normalizarCiudadLocal(params.ciudad),
           latitud: gps.lat,
           longitud: gps.lon,
           rating: toNumber(item.rating),
@@ -399,8 +434,7 @@ async function buscarTripadvisor(params: {
 
   const url = new URL("https://serpapi.com/search.json");
   url.searchParams.set("engine", "tripadvisor");
-  url.searchParams.set("q", tipoToQuery(params.tipo, params.ciudad));
-  url.searchParams.set("location", `${params.ciudad}, España`);
+  url.searchParams.set("q", `${tipoToQuery(params.tipo, normalizarCiudadLocal(params.ciudad))} España`);
   url.searchParams.set("hl", "es");
   url.searchParams.set("api_key", env.SERPAPI_API_KEY);
 
@@ -425,7 +459,7 @@ async function buscarTripadvisor(params: {
           nombre: clean(item.title ?? item.name) ?? "Restaurante",
           categoria: clean(item.type ?? item.category ?? item.result_type) ?? categoriaFromTipo(params.tipo),
           direccion: parseAddress(item.address ?? item.location_string),
-          ciudad: params.ciudad,
+          ciudad: normalizarCiudadLocal(params.ciudad),
           latitud: gps.lat,
           longitud: gps.lon,
           rating: toNumber(item.rating),
@@ -472,7 +506,7 @@ async function buscarCache(params: { ciudad: string; tipo: TipoLocal; limit: num
           nombre: item.nombre,
           categoria: item.categoria ?? categoriaFromTipo(params.tipo),
           direccion: item.direccion,
-          ciudad: params.ciudad,
+          ciudad: normalizarCiudadLocal(params.ciudad),
           latitud: item.latitud,
           longitud: item.longitud,
           rating: item.rating,
@@ -553,6 +587,8 @@ async function upsertCache(items: LugarLocal[]) {
 }
 
 export default async function lugaresLocalesRoutes(app: FastifyInstance) {
+  app.get("/ciudades", async () => ({ ok: true, items: CIUDADES_LOCAL_SERPAPI }));
+
   app.get("/buscar", async (request, reply) => {
     const query = request.query as {
       ciudad?: string;
@@ -571,7 +607,7 @@ export default async function lugaresLocalesRoutes(app: FastifyInstance) {
       return reply.code(503).send({ ok: false, message: "La búsqueda local está desactivada." });
     }
 
-    const ciudad = clean(query.ciudad ?? query.destino) ?? "";
+    const ciudad = normalizarCiudadLocal(clean(query.ciudad ?? query.destino) ?? "");
     if (!ciudad) {
       return reply.code(400).send({ ok: false, message: "La ciudad es obligatoria." });
     }
@@ -612,8 +648,11 @@ export default async function lugaresLocalesRoutes(app: FastifyInstance) {
       };
     });
 
-    const warnings = providerResults.flatMap((result) => (result.warning ? [result.warning] : []));
     const items = deduplicate(providerResults.flatMap((result) => result.items)).slice(0, limit);
+    const rawWarnings = providerResults.flatMap((result) => (result.warning ? [result.warning] : []));
+    const warnings = items.length > 0
+      ? rawWarnings.filter((warning) => warning.toLowerCase().includes("no está configurado"))
+      : rawWarnings;
     void upsertCache(items);
 
     return {

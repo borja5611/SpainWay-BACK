@@ -627,7 +627,7 @@ type LoggerLike = {
 };
 
 const IA_DEFAULT_URL = "https://spainway-ia.onrender.com";
-const IA_RETRY_DELAYS_MS = [0, 8000, 15000, 25000, 35000, 45000];
+const IA_RETRY_DELAYS_MS = [0, 2500, 5000, 8000];
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -678,7 +678,7 @@ async function despertarModeloIa(baseUrl: string, log?: LoggerLike): Promise<voi
     await fetchWithTimeout(
       `${baseUrl}/health`,
       { method: "GET", headers: { Accept: "application/json" } },
-      15000,
+      8000,
     );
   } catch (error) {
     log?.warn({ error }, "No se pudo despertar la IA en /health; se continuará con reintentos.");
@@ -710,7 +710,7 @@ async function llamarModeloIa(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         },
-        70000,
+        45000,
       );
 
       if (response.ok) {
@@ -737,7 +737,7 @@ async function llamarModeloIa(
     } catch (error) {
       const isAbort = error instanceof Error && error.name === "AbortError";
       ultimoError = isAbort
-        ? "La IA tardó demasiado en responder mientras Render arrancaba el servicio."
+        ? "La IA tardó más de lo esperado. Render puede estar terminando de arrancar."
         : error instanceof Error
           ? error.message
           : String(error);
@@ -755,7 +755,7 @@ async function llamarModeloIa(
   }
 
   throw new Error(
-    `No se pudo generar el itinerario porque el servicio IA no terminó de despertar en Render. Último detalle: ${ultimoError}`,
+    `No se pudo generar el itinerario porque la IA tardó demasiado en responder. Espera unos segundos y vuelve a pulsar generar. Último detalle: ${ultimoError}`,
   );
 }
 

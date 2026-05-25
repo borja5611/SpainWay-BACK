@@ -785,11 +785,11 @@ async function responderBusquedaEventos(params: {
     city: destino,
     from: rango.from,
     to: rango.to,
-    lat:
+    latitud:
       params.itinerario?.base_latitud ??
       params.itinerario?.base_latitude ??
       null,
-    lng:
+    longitud:
       params.itinerario?.base_longitud ??
       params.itinerario?.base_longitude ??
       null,

@@ -3,7 +3,7 @@ import axios from "axios";
 import { prisma } from "../../lib/prisma";
 import { env } from "../../config/env";
 
-type LiveEventProvider = "ticketmaster" | "predicthq" | "serpapi";
+export type LiveEventProvider = "ticketmaster" | "predicthq" | "serpapi";
 
 export type LiveEvent = {
   id: string;
@@ -94,15 +94,30 @@ type PredictHQResponse = {
   results?: PredictHQEvent[];
 };
 
-type SerpApiEvent = {
+type SerpApiGoogleEvent = {
   title?: string;
   description?: string;
   link?: string;
   thumbnail?: string;
-  date?: { start_date?: string; when?: string };
-  venue?: { name?: string; address?: string[] | string };
-  address?: string[] | string;
-  ticket_info?: Array<{ link?: string }>;
+  address?: string[];
+  venue?: {
+    name?: string;
+    link?: string;
+  };
+  date?: {
+    when?: string;
+    start_date?: string;
+    start_time?: string;
+  };
+  ticket_info?: Array<{
+    source?: string;
+    link?: string;
+    link_type?: string;
+  }>;
+};
+
+type SerpApiResponse = {
+  events_results?: SerpApiGoogleEvent[];
 };
 
 type SearchAttempt = {
@@ -113,44 +128,6 @@ type SearchAttempt = {
   radiusKm: number;
   useCityForTicketmaster: boolean;
   useCityForPredictHQ: boolean;
-};
-
-type EventosLiveAgregadoResponse = {
-  city: string;
-  from: string;
-  to: string;
-  coordenadas: {
-    latitud: number | null;
-    longitud: number | null;
-  };
-  search_strategy: {
-    success_attempt: string | null;
-    success_label: string | null;
-    requested_radius_km: number;
-    used_from: string | null;
-    used_to: string | null;
-    used_radius_km: number | null;
-    attempted: Array<{
-      code: string;
-      label: string;
-      from: string;
-      to: string;
-      radiusKm: number;
-      ticketmaster: number;
-      predicthq: number;
-      serpapi: number;
-      total: number;
-    }>;
-  };
-  message: string;
-  providers: {
-    ticketmaster: number;
-    predicthq: number;
-    serpapi: number;
-  };
-  total: number;
-  events: LiveEvent[];
-  warnings: string[];
 };
 
 function toNumber(value: unknown): number | null {
@@ -214,12 +191,6 @@ function getLocalYmdMadrid(value?: string | null): string | null {
 
   if (!year || !month || !day) return null;
   return `${year}-${month}-${day}`;
-}
-
-function parseSerpAddress(value: unknown): string | null {
-  if (Array.isArray(value)) return value.filter(Boolean).join(", ") || null;
-  if (typeof value === "string") return value.trim() || null;
-  return null;
 }
 
 function pickBestImage(images: TicketmasterImage[] | undefined): string | null {
@@ -313,27 +284,48 @@ function mapPredictHQEvent(event: PredictHQEvent, city: string): LiveEvent {
   };
 }
 
-function mapSerpApiEvent(event: SerpApiEvent, city: string, index: number): LiveEvent {
-  const start = event.date?.start_date
-    ? `${event.date.start_date}T20:00:00`
-    : event.date?.when ?? "";
+function parseSerpApiDate(event: SerpApiGoogleEvent): string {
+  const startDate = event.date?.start_date?.trim();
+  const startTime = event.date?.start_time?.trim();
+
+  if (startDate) {
+    const dateParts = startDate.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (dateParts) return `${dateParts[1]}-${dateParts[2]}-${dateParts[3]}T${startTime || "20:00:00"}`;
+
+    const parsed = new Date(`${startDate} ${startTime || "20:00"}`);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+
+  const when = event.date?.when?.trim();
+  if (when) {
+    const parsed = new Date(when);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+
+  return "";
+}
+
+function mapSerpApiEvent(event: SerpApiGoogleEvent, city: string, index: number): LiveEvent {
+  const address = Array.isArray(event.address) ? event.address.filter(Boolean).join(", ") : null;
+  const ticketUrl = event.ticket_info?.find((item) => item.link)?.link ?? null;
+  const venueName = event.venue?.name?.trim() || null;
 
   return {
-    id: `serpapi_${normalizarTexto(event.title ?? "evento").replace(/\s+/g, "_")}_${index}`,
+    id: `serpapi_${normalizarTexto(`${event.title ?? "evento"}_${parseSerpApiDate(event)}_${venueName ?? city}_${index}`).replace(/\s+/g, "_").slice(0, 120)}`,
     provider: "serpapi",
     nombre: event.title?.trim() || "Evento Google Events",
     descripcion: event.description?.trim() || null,
-    categoria: "Evento local",
-    fechaInicio: start,
+    categoria: "Evento",
+    fechaInicio: parseSerpApiDate(event),
     fechaFin: null,
     ciudad: city,
-    recinto: event.venue?.name?.trim() || null,
-    direccion: parseSerpAddress(event.venue?.address) ?? parseSerpAddress(event.address),
+    recinto: venueName,
+    direccion: address,
     latitud: null,
     longitud: null,
     imagen: event.thumbnail?.trim() || null,
-    url: event.link?.trim() || event.ticket_info?.[0]?.link?.trim() || null,
-    score: 80,
+    url: ticketUrl || event.link?.trim() || event.venue?.link?.trim() || null,
+    score: 78,
   };
 }
 
@@ -451,7 +443,6 @@ function scoreCategoriaEvento(event: LiveEvent): number {
   if (c.includes("sports")) return 8;
   if (c.includes("community")) return 6;
   if (c.includes("expo")) return 4;
-  if (c.includes("evento")) return 4;
   return 0;
 }
 
@@ -489,7 +480,9 @@ function deduplicarEventos(events: LiveEvent[]) {
       const fechaSaved = getLocalYmdMadrid(saved.fechaInicio) ?? "";
       const sameDay = fechaLocal === fechaSaved;
       const venueSaved = normalizarTexto(saved.recinto ?? "");
-      const sameVenue = venue && venueSaved ? venue === venueSaved : false;
+      const sameVenue =
+        venue && venueSaved ? venue === venueSaved : false;
+
       const titleSimilar = sonTitulosParecidos(event.nombre, saved.nombre);
 
       return sameDay && (sameVenue || titleSimilar);
@@ -650,31 +643,30 @@ async function fetchSerpApiEvents(params: {
   city: string;
   from: string;
   to: string;
-  category?: string | null;
+  keyword?: string | null;
 }): Promise<LiveEvent[]> {
-  if (!env.SERPAPI_API_KEY) return [];
+  if (!process.env.SERPAPI_API_KEY) return [];
 
   try {
-    const keyword = params.category?.trim() || "conciertos teatro festivales fiestas locales";
-    const q = `${keyword} en ${params.city} del ${params.from} al ${params.to}`;
-    const response = await axios.get("https://serpapi.com/search.json", {
-      params: {
-        engine: "google_events",
-        q,
-        hl: "es",
-        gl: "es",
-        api_key: env.SERPAPI_API_KEY,
+    const keyword = params.keyword?.trim() || "eventos conciertos teatro festivales";
+    const q = `${keyword} en ${params.city} entre ${params.from} y ${params.to}`;
+
+    const response = await axios.get<SerpApiResponse>(
+      "https://serpapi.com/search.json",
+      {
+        params: {
+          engine: "google_events",
+          q,
+          hl: "es",
+          gl: "es",
+          api_key: process.env.SERPAPI_API_KEY,
+        },
+        timeout: Number(process.env.EVENTS_LIVE_TIMEOUT_MS || 7000),
       },
-      timeout: env.EVENTS_LIVE_TIMEOUT_MS,
-    });
-
-    const events = Array.isArray(response.data?.events_results)
-      ? response.data.events_results
-      : [];
-
-    return events.map((event: SerpApiEvent, index: number) =>
-      mapSerpApiEvent(event, params.city, index),
     );
+
+    const events = response.data.events_results ?? [];
+    return events.map((event, index) => mapSerpApiEvent(event, params.city, index));
   } catch (error) {
     console.error("Error SerpApi Google Events:", error);
     return [];
@@ -686,9 +678,9 @@ async function executeAttempt(params: {
   latitud: number | null;
   longitud: number | null;
   attempt: SearchAttempt;
-  category?: string | null;
+  keyword?: string | null;
 }) {
-  const [ticketmasterEvents, predictHQEvents, serpApiEvents] = await Promise.all([
+  const [ticketmasterResult, predictHQResult, serpApiResult] = await Promise.allSettled([
     fetchTicketmasterEvents({
       city: params.city,
       from: params.attempt.from,
@@ -711,9 +703,13 @@ async function executeAttempt(params: {
       city: params.city,
       from: params.attempt.from,
       to: params.attempt.to,
-      category: params.category,
+      keyword: params.keyword,
     }),
   ]);
+
+  const ticketmasterEvents = ticketmasterResult.status === "fulfilled" ? ticketmasterResult.value : [];
+  const predictHQEvents = predictHQResult.status === "fulfilled" ? predictHQResult.value : [];
+  const serpApiEvents = serpApiResult.status === "fulfilled" ? serpApiResult.value : [];
 
   const merged = enriquecerYFiltrarEventos(
     filtrarPorFechas(
@@ -794,62 +790,35 @@ function buildZeroMessage(city: string, from: string, to: string) {
   return `No encontramos eventos turísticos útiles para ${city} entre ${from} y ${to}, ni siquiera ampliando radio y días cercanos.`;
 }
 
-function buildWarnings(): string[] {
-  const warnings: string[] = [];
-
-  if (!env.TICKETMASTER_API_KEY) {
-    warnings.push("Ticketmaster no está configurado.");
-  }
-
-  if (!env.PREDICTHQ_API_KEY) {
-    warnings.push("PredictHQ no está configurado.");
-  }
-
-  if (!env.SERPAPI_API_KEY) {
-    warnings.push("SerpApi no está configurado.");
-  }
-
-  return warnings;
-}
 
 export async function buscarEventosLiveAgregado(params: {
   city: string;
   from: string;
   to: string;
-  lat?: number | null;
-  lng?: number | null;
+  latitud?: number | null;
+  longitud?: number | null;
   radiusKm?: number | null;
   category?: string | null;
-}): Promise<EventosLiveAgregadoResponse> {
+}) {
   const city = params.city.trim();
   const from = params.from.trim();
   const to = params.to.trim();
 
   if (!city || !from || !to) {
     return {
+      ok: false,
       city,
       from,
       to,
-      coordenadas: { latitud: null, longitud: null },
-      search_strategy: {
-        success_attempt: null,
-        success_label: null,
-        requested_radius_km: 0,
-        used_from: null,
-        used_to: null,
-        used_radius_km: null,
-        attempted: [],
-      },
       message: "Parámetros obligatorios: city, from, to",
       providers: { ticketmaster: 0, predicthq: 0, serpapi: 0 },
       total: 0,
-      events: [],
-      warnings: ["Parámetros obligatorios: city, from, to"],
+      events: [] as LiveEvent[],
     };
   }
 
-  let latitud = params.lat ?? null;
-  let longitud = params.lng ?? null;
+  let latitud = params.latitud ?? null;
+  let longitud = params.longitud ?? null;
 
   if (latitud === null || longitud === null) {
     const coords = await resolverCoordenadasCiudad(city);
@@ -858,24 +827,26 @@ export async function buscarEventosLiveAgregado(params: {
   }
 
   const requestedRadiusKm = clamp(
-    params.radiusKm ?? env.PREDICTHQ_RADIUS_KM,
+    toNumber(params.radiusKm) ?? env.PREDICTHQ_RADIUS_KM,
     20,
     80,
   );
 
   const attempts = buildAttempts(from, to, requestedRadiusKm);
-  const warnings = buildWarnings();
-
-  const tried: EventosLiveAgregadoResponse["search_strategy"]["attempted"] = [];
+  const tried: Array<{
+    code: string;
+    label: string;
+    from: string;
+    to: string;
+    radiusKm: number;
+    ticketmaster: number;
+    predicthq: number;
+    serpapi: number;
+    total: number;
+  }> = [];
 
   for (const attempt of attempts) {
-    const result = await executeAttempt({
-      city,
-      latitud,
-      longitud,
-      attempt,
-      category: params.category ?? null,
-    });
+    const result = await executeAttempt({ city, latitud, longitud, attempt, keyword: params.category });
 
     tried.push({
       code: attempt.code,
@@ -891,13 +862,11 @@ export async function buscarEventosLiveAgregado(params: {
 
     if (result.events.length > 0) {
       return {
+        ok: true,
         city,
         from,
         to,
-        coordenadas: {
-          latitud,
-          longitud,
-        },
+        coordenadas: { latitud, longitud },
         search_strategy: {
           success_attempt: attempt.code,
           success_label: attempt.label,
@@ -910,20 +879,17 @@ export async function buscarEventosLiveAgregado(params: {
         message: buildSuccessMessage(city, attempt, from, to),
         providers: result.providers,
         total: result.events.length,
-        events: result.events,
-        warnings,
+        events: result.events.slice(0, env.EVENTS_LIVE_MAX_RESULTS),
       };
     }
   }
 
   return {
+    ok: true,
     city,
     from,
     to,
-    coordenadas: {
-      latitud,
-      longitud,
-    },
+    coordenadas: { latitud, longitud },
     search_strategy: {
       success_attempt: null,
       success_label: null,
@@ -934,14 +900,9 @@ export async function buscarEventosLiveAgregado(params: {
       attempted: tried,
     },
     message: buildZeroMessage(city, from, to),
-    providers: {
-      ticketmaster: 0,
-      predicthq: 0,
-      serpapi: 0,
-    },
+    providers: { ticketmaster: 0, predicthq: 0, serpapi: 0 },
     total: 0,
-    events: [],
-    warnings,
+    events: [] as LiveEvent[],
   };
 }
 
@@ -982,17 +943,108 @@ export default async function eventosLiveRoutes(app: FastifyInstance) {
       });
     }
 
-    const result = await buscarEventosLiveAgregado({
+    let latitud = toNumber(query.lat);
+    let longitud = toNumber(query.lng);
+
+    if (latitud === null || longitud === null) {
+      const coords = await resolverCoordenadasCiudad(city);
+      latitud = coords.latitud;
+      longitud = coords.longitud;
+    }
+
+    const requestedRadiusKm = clamp(
+      toNumber(query.radiusKm) ?? env.PREDICTHQ_RADIUS_KM,
+      20,
+      80,
+    );
+
+    const attempts = buildAttempts(from, to, requestedRadiusKm);
+
+    const tried: Array<{
+      code: string;
+      label: string;
+      from: string;
+      to: string;
+      radiusKm: number;
+      ticketmaster: number;
+      predicthq: number;
+      serpapi: number;
+      total: number;
+    }> = [];
+
+    for (const attempt of attempts) {
+      const result = await executeAttempt({
+        city,
+        latitud,
+        longitud,
+        attempt,
+        keyword: query.category,
+      });
+
+      tried.push({
+        code: attempt.code,
+        label: attempt.label,
+        from: attempt.from,
+        to: attempt.to,
+        radiusKm: attempt.radiusKm,
+        ticketmaster: result.providers.ticketmaster,
+        predicthq: result.providers.predicthq,
+        serpapi: result.providers.serpapi,
+        total: result.events.length,
+      });
+
+      if (result.events.length > 0) {
+        return reply.send({
+          city,
+          from,
+          to,
+          coordenadas: {
+            latitud,
+            longitud,
+          },
+          search_strategy: {
+            success_attempt: attempt.code,
+            success_label: attempt.label,
+            requested_radius_km: requestedRadiusKm,
+            used_from: attempt.from,
+            used_to: attempt.to,
+            used_radius_km: attempt.radiusKm,
+            attempted: tried,
+          },
+          message: buildSuccessMessage(city, attempt, from, to),
+          providers: result.providers,
+          total: result.events.length,
+          events: result.events,
+        });
+      }
+    }
+
+    return reply.send({
       city,
       from,
       to,
-      lat: toNumber(query.lat),
-      lng: toNumber(query.lng),
-      radiusKm: toNumber(query.radiusKm),
-      category: query.category ?? null,
+      coordenadas: {
+        latitud,
+        longitud,
+      },
+      search_strategy: {
+        success_attempt: null,
+        success_label: null,
+        requested_radius_km: requestedRadiusKm,
+        used_from: null,
+        used_to: null,
+        used_radius_km: null,
+        attempted: tried,
+      },
+      message: buildZeroMessage(city, from, to),
+      providers: {
+        ticketmaster: 0,
+        predicthq: 0,
+        serpapi: 0,
+      },
+      total: 0,
+      events: [],
     });
-
-    return reply.send(result);
   });
 
   app.get("/selecciones/:idItinerario", async (request, reply) => {

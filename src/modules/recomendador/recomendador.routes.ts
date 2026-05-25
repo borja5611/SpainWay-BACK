@@ -622,23 +622,141 @@ async function completarDiasConBbdd(
   return result;
 }
 
-async function llamarModeloIa(
-  payload: PayloadRecomendador,
-): Promise<IaResponse> {
-  const baseUrl = process.env.RECOMMENDER_API_URL || "https://spainway-ia.onrender.com";
+type LoggerLike = {
+  warn: (data: unknown, message?: string) => void;
+};
 
-  const response = await fetch(`${baseUrl}/recommend/itinerary`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+const IA_DEFAULT_URL = "https://spainway-ia.onrender.com";
+const IA_RETRY_DELAYS_MS = [0, 8000, 15000, 25000, 35000, 45000];
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`IA ${response.status}: ${text}`);
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getIaBaseUrl(): string {
+  return (process.env.RECOMMENDER_API_URL || IA_DEFAULT_URL).replace(/\/+$/, "");
+}
+
+function isRetryableIaStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || (status >= 500 && status <= 504);
+}
+
+function limpiarErrorIa(status: number, text: string): string {
+  const raw = text.trim();
+
+  if (!raw) {
+    return `IA ${status}: el servicio no devolvió detalle del error.`;
   }
 
-  return response.json() as Promise<IaResponse>;
+  if (raw.startsWith("<!DOCTYPE") || raw.startsWith("<html") || raw.includes("<title>502</title>")) {
+    return `IA ${status}: Render devolvió una página de error temporal. El servicio probablemente estaba arrancando.`;
+  }
+
+  return `IA ${status}: ${raw.slice(0, 500)}`;
+}
+
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function despertarModeloIa(baseUrl: string, log?: LoggerLike): Promise<void> {
+  try {
+    await fetchWithTimeout(
+      `${baseUrl}/health`,
+      { method: "GET", headers: { Accept: "application/json" } },
+      15000,
+    );
+  } catch (error) {
+    log?.warn({ error }, "No se pudo despertar la IA en /health; se continuará con reintentos.");
+  }
+}
+
+async function llamarModeloIa(
+  payload: PayloadRecomendador,
+  log?: LoggerLike,
+): Promise<IaResponse> {
+  const baseUrl = getIaBaseUrl();
+  const endpoint = `${baseUrl}/recommend/itinerary`;
+  let ultimoError = "La IA no respondió correctamente.";
+
+  await despertarModeloIa(baseUrl, log);
+
+  for (let intento = 0; intento < IA_RETRY_DELAYS_MS.length; intento += 1) {
+    const delayMs = IA_RETRY_DELAYS_MS[intento];
+
+    if (delayMs > 0) {
+      await sleep(delayMs);
+    }
+
+    try {
+      const response = await fetchWithTimeout(
+        endpoint,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        70000,
+      );
+
+      if (response.ok) {
+        return response.json() as Promise<IaResponse>;
+      }
+
+      const text = await response.text();
+      ultimoError = limpiarErrorIa(response.status, text);
+
+      log?.warn(
+        {
+          intento: intento + 1,
+          totalIntentos: IA_RETRY_DELAYS_MS.length,
+          status: response.status,
+          retryable: isRetryableIaStatus(response.status),
+          endpoint,
+        },
+        "La IA devolvió un error temporal al generar itinerario.",
+      );
+
+      if (!isRetryableIaStatus(response.status)) {
+        throw new Error(ultimoError);
+      }
+    } catch (error) {
+      const isAbort = error instanceof Error && error.name === "AbortError";
+      ultimoError = isAbort
+        ? "La IA tardó demasiado en responder mientras Render arrancaba el servicio."
+        : error instanceof Error
+          ? error.message
+          : String(error);
+
+      log?.warn(
+        {
+          intento: intento + 1,
+          totalIntentos: IA_RETRY_DELAYS_MS.length,
+          error,
+          endpoint,
+        },
+        "No se pudo conectar con la IA; se reintentará si quedan intentos.",
+      );
+    }
+  }
+
+  throw new Error(
+    `No se pudo generar el itinerario porque el servicio IA no terminó de despertar en Render. Último detalle: ${ultimoError}`,
+  );
 }
 
 function esCategoriaEventoNoDeseada(categoria: string): boolean {
@@ -1059,12 +1177,13 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
 
     let ia: IaResponse;
     try {
-      ia = await llamarModeloIa(payload);
+      ia = await llamarModeloIa(payload, request.log);
     } catch (error) {
       request.log.error(error);
-      return reply.code(502).send({
+      return reply.code(503).send({
         ok: false,
-        message: `No se pudo conectar con el modelo IA. URL configurada: ${process.env.RECOMMENDER_API_URL || "https://spainway-ia.onrender.com"}`,
+        message:
+          "El servicio de IA está arrancando en Render. Espera unos segundos y vuelve a intentarlo.",
         error: error instanceof Error ? error.message : String(error),
       });
     }

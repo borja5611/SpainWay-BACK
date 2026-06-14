@@ -171,6 +171,146 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
     return itinerario;
   });
 
+  // ─── Helpers locales para el endpoint de mapa ───────────────────────────────
+  function toIsoOrNull(value: Date | string | null | undefined): string | null {
+    if (value === null || value === undefined) return null;
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+
+  function toFiniteNumber(value: unknown): number | null {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  app.get("/mapa/:id_usuario", async (request, reply) => {
+    let usuarioId: number;
+
+    try {
+      usuarioId = await getUsuarioIdAutenticado(request);
+    } catch {
+      return reply.code(401).send({ message: "No autorizado" });
+    }
+
+    const { id_usuario } = request.params as { id_usuario: string };
+
+    if (!validarUsuarioDeRuta(id_usuario, usuarioId)) {
+      return reply.code(403).send({ message: "No puedes consultar itinerarios de otro usuario" });
+    }
+
+    try {
+      const itinerarios = await prisma.itinerario.findMany({
+        where: { id_usuario: usuarioId },
+        select: {
+          id_itinerario: true,
+          titulo: true,
+          destino: true,
+          inicio: true,
+          fin: true,
+          creado: true,
+          dias: {
+            orderBy: { fecha: "asc" as const },
+            select: {
+              id_dia_itinerario: true,
+              fecha: true,
+              elementos: {
+                orderBy: { orden: "asc" as const },
+                select: {
+                  id_elemento_itinerario: true,
+                  orden: true,
+                  inicio: true,
+                  fin: true,
+                  poi: {
+                    select: {
+                      id_poi: true,
+                      nombre: true,
+                      tipo: true,
+                      subcategoria: true,
+                      direccion: true,
+                      latitud: true,
+                      longitud: true,
+                      descripcion: true,
+                      google_search_url: true,
+                      categoria_poi: {
+                        select: { id_categoria_poi: true, nombre: true },
+                      },
+                      municipio: {
+                        select: { id_municipio: true, nombre: true },
+                      },
+                      destacados_ccaa: {
+                        select: { imagen_url: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { creado: "desc" },
+      });
+
+      const resultado = itinerarios.map((it, _i) => ({
+        id_itinerario: it.id_itinerario,
+        titulo: it.titulo ?? null,
+        destino: it.destino ?? null,
+        inicio: toIsoOrNull(it.inicio),
+        fin: toIsoOrNull(it.fin),
+        dias: it.dias.map((dia, diaIndex) => ({
+          id_dia_itinerario: dia.id_dia_itinerario,
+          numero_dia: diaIndex + 1,
+          fecha: toIsoOrNull(dia.fecha),
+          pois: dia.elementos
+            .filter((el) => {
+              if (!el.poi) return false;
+              const lat = toFiniteNumber(el.poi.latitud);
+              const lng = toFiniteNumber(el.poi.longitud);
+              return lat !== null && lng !== null;
+            })
+            .map((el) => {
+              const poi = el.poi!;
+              const lat = toFiniteNumber(poi.latitud)!;
+              const lng = toFiniteNumber(poi.longitud)!;
+              const categoria =
+                (poi.categoria_poi as { nombre?: string } | null)?.nombre ??
+                poi.tipo ??
+                poi.subcategoria ??
+                "Lugar de interés";
+              const imagen_url =
+                (poi.destacados_ccaa as { imagen_url?: string | null }[])
+                  ?.find((d) => d.imagen_url)?.imagen_url ?? null;
+              return {
+                id_poi: poi.id_poi,
+                nombre: poi.nombre,
+                categoria,
+                descripcion: poi.descripcion ?? null,
+                direccion: poi.direccion ?? null,
+                latitud: lat,
+                longitud: lng,
+                orden: el.orden ?? null,
+                inicio: toIsoOrNull(el.inicio),
+                fin: toIsoOrNull(el.fin),
+                google_search_url: poi.google_search_url ?? null,
+                imagen_url,
+                municipio: poi.municipio
+                  ? {
+                      id_municipio: (poi.municipio as { id_municipio: number; nombre: string }).id_municipio,
+                      nombre: (poi.municipio as { id_municipio: number; nombre: string }).nombre,
+                    }
+                  : null,
+              };
+            }),
+        })),
+      }));
+
+      return reply.send(resultado);
+    } catch (error) {
+      console.error("Error cargando itinerarios para mapa:", error);
+      return reply.code(500).send({ message: "No se pudieron cargar los itinerarios para el mapa" });
+    }
+  });
+
   app.get("/:id_usuario", async (request, reply) => {
     let usuarioId: number;
 

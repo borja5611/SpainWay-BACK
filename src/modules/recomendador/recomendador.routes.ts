@@ -1202,11 +1202,16 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
 
     const iaResult = await callIaItinerary<IaResponse>(payload);
     if (!iaResult.ok) {
+      // Contrato de error explícito para el frontend: puede distinguir
+      // IA_WARMING / IA_TIMEOUT / IA_UNAVAILABLE / IA_BUSY y reaccionar sin
+      // perder los datos del formulario ni mostrar un "fetch failed".
       const statusCode = iaResult.status === "busy" ? 409 : 503;
       return reply.code(statusCode).send({
         ok: false,
+        code: iaResult.code,
         status: iaResult.status,
         message: iaResult.message,
+        retryable: iaResult.retryable,
       });
     }
     const ia = iaResult.data;

@@ -84,6 +84,67 @@ const includeItinerarioCompleto = {
 };
 
 export default async function itinerariosRoutes(app: FastifyInstance) {
+  // -----------------------------------------------------------------------
+  // GET /:idItinerario/auditoria
+  // Traza de decisión del recomendador para un itinerario (requiere ser dueño).
+  // Devuelve available:false para itinerarios antiguos sin traza.
+  // -----------------------------------------------------------------------
+  app.get("/:idItinerario/auditoria", async (request, reply) => {
+    let usuarioId: number;
+    try {
+      usuarioId = await getUsuarioIdAutenticado(request);
+    } catch {
+      return reply.code(401).send({ ok: false, message: "No autenticado" });
+    }
+
+    const { idItinerario } = request.params as { idItinerario?: string };
+    const idItin = toInt(idItinerario);
+    if (idItin === null) {
+      return reply.code(400).send({ ok: false, message: "idItinerario inválido" });
+    }
+
+    const itinerario = await prisma.itinerario.findFirst({
+      where: { id_itinerario: idItin, id_usuario: usuarioId },
+      select: { id_itinerario: true, titulo: true, destino: true, ia_json: true },
+    });
+
+    if (!itinerario) {
+      return reply
+        .code(404)
+        .send({ ok: false, message: "Itinerario no encontrado o no te pertenece" });
+    }
+
+    const ia = (itinerario.ia_json as Record<string, unknown> | null) ?? null;
+    const engine = (ia?.engine_metadata as Record<string, unknown> | undefined) ?? null;
+    const trace = (ia?.decision_trace as Record<string, unknown> | undefined) ?? null;
+    const available = Boolean(engine || trace);
+
+    if (!available) {
+      return reply.send({
+        ok: true,
+        available: false,
+        id_itinerario: itinerario.id_itinerario,
+        summary_message: "Resumen de criterios utilizados para construir la recomendación.",
+        message:
+          "Este itinerario se generó con una versión anterior y no incluye traza de auditoría.",
+      });
+    }
+
+    return reply.send({
+      ok: true,
+      available: true,
+      id_itinerario: itinerario.id_itinerario,
+      engine,
+      input_summary: (trace?.input_summary as unknown) ?? null,
+      candidate_pipeline: (trace?.candidate_pipeline as unknown) ?? [],
+      scoring_weights: (trace?.scoring_weights as unknown) ?? null,
+      selected_summary: (trace?.selected_summary as unknown) ?? null,
+      quality_flags: (trace?.quality_flags as unknown) ?? [],
+      quality_metrics: (ia?.quality_metrics as unknown) ?? null,
+      summary_message: "Resumen de criterios utilizados para construir la recomendación.",
+    });
+  });
+
   app.get("/resumen/:id_usuario", async (request, reply) => {
     let usuarioId: number;
 

@@ -1,12 +1,19 @@
 import { FastifyInstance } from "fastify";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { callIaItinerary } from "../../servicios/ia.service";
 import {
   obtenerContextoUsuarioSpainWay,
   contextoToTexto,
+  type ContextoUsuarioSpainWay,
 } from "./recomendador-contexto.service";
 import { obtenerContextoMeteorologicoSpainWay } from "../meteorologia/meteorologia.service";
+import {
+  normalizarRitmo,
+  normalizarTransporte,
+  construirRequestSeed,
+  sanitizarLista,
+} from "./recomendador-normalizacion";
 
 type PayloadRecomendador = {
   id_usuario?: number;
@@ -32,32 +39,23 @@ type PayloadRecomendador = {
   visited_poi_names?: string[];
   negative_preferences?: string[];
   include_live_events?: boolean;
-  // Contexto real enviado al motor IA (Fase 8/9): opcional para no romper
-  // compatibilidad con llamadas antiguas o pruebas que no lo incluyan.
-  user_context?: UserContextPayload | null;
-  weather_context?: WeatherContextPayload;
+  // Señales de interés que envía el frontend (antes se perdían al reconstruir el payload).
+  wants_beach?: boolean;
+  wants_nature?: boolean;
+  wants_culture?: boolean;
+  wants_food?: boolean;
+  wants_events?: boolean;
+  interest_tags?: string[];
+  travel_style_tags?: string[];
+  climate_preference?: string;
+  // Contexto enriquecido y reproducibilidad (se rellenan en el backend).
+  request_seed?: string;
+  context_text?: string;
+  user_context?: Record<string, unknown>;
+  weather_context?: Record<string, unknown>;
 };
 
-// --- Contexto de usuario real (Fase 8) --------------------------------------
-type UserContextPayload = {
-  preferences: unknown;
-  favorites: unknown;
-  recent_messages: unknown;
-  context_text: string;
-  visited_global_ids: string[];
-  negative_preferences: string[];
-};
-
-// --- Contexto meteorológico (Fase 9) ----------------------------------------
-type WeatherContextPayload =
-  | {
-      available: true;
-      summary: string;
-      rainy_slots: string[];
-      hot_slots: string[];
-      recommended_adjustments: string[];
-    }
-  | { available: false };
+type ScoreBreakdown = Record<string, number>;
 
 type IaPoi = {
   global_id?: string;
@@ -69,13 +67,25 @@ type IaPoi = {
   image_url?: string;
   imagen_url?: string;
   google_search_url?: string;
-  // Explicabilidad del motor propio (opcional, no rompe POIs antiguos sin estos campos).
-  score_breakdown?: Record<string, number>;
+  // Explicabilidad por POI (opcional; se conserva tal cual llega de la IA).
+  score_breakdown?: ScoreBreakdown;
   selection_reasons?: string[];
-  confidence?: number;
-  semantic_affinity?: number;
-  is_curated_highlight?: boolean;
+  confidence?: number | null;
 };
+
+type ScheduleSlot = {
+  slot_type?: string;
+  start_time?: string;
+  end_time?: string;
+  poi_global_id?: string | null;
+  poi_name?: string | null;
+  estimated_visit_minutes?: number;
+  travel_from_previous_minutes?: number;
+  estimated_distance_km?: number;
+  reason?: string;
+};
+
+type RouteMetrics = Record<string, unknown>;
 
 type IaDayPlan = {
   day_number?: number;
@@ -88,10 +98,8 @@ type IaDayPlan = {
   items?: IaPoi[];
   local_tips?: string[];
   consejos?: string[];
-  // Planificación por horarios (Fase 7 IA): opcional.
-  schedule?: unknown[];
-  route_metrics?: unknown;
-  quality_metrics?: unknown;
+  schedule?: ScheduleSlot[];
+  route_metrics?: RouteMetrics | null;
 };
 
 type IaResponse = {
@@ -103,9 +111,10 @@ type IaResponse = {
   items?: IaPoi[];
   day_plans?: IaDayPlan[];
   dias?: IaDayPlan[];
-  // Trazabilidad explicable del motor propio (Fase 1 IA): opcional.
-  engine_metadata?: unknown;
-  decision_trace?: unknown;
+  engine_metadata?: Record<string, unknown>;
+  decision_trace?: Record<string, unknown>;
+  request_seed?: string;
+  quality_metrics?: Record<string, unknown>;
   [key: string]: unknown;
 };
 
@@ -115,11 +124,66 @@ type DiaNormalizado = {
   total_minutes: number | null;
   pois: IaPoi[];
   local_tips: string[];
-  // Trazabilidad por día (Fase 7/13): opcional, se propaga tal cual desde la IA.
-  schedule?: unknown[];
-  route_metrics?: unknown;
-  quality_metrics?: unknown;
+  // Planificación horaria y métricas de ruta que emite la IA (opcional).
+  schedule?: ScheduleSlot[];
+  route_metrics?: RouteMetrics | null;
 };
+
+// ---------------------------------------------------------------------------
+// Contexto enriquecido hacia la IA. Nunca debe bloquear la generación: si el
+// contexto de usuario o el meteorológico fallan, se continúa sin ellos.
+// ---------------------------------------------------------------------------
+async function obtenerContextoUsuarioSafe(
+  idUsuario: number,
+): Promise<ContextoUsuarioSpainWay | null> {
+  try {
+    return await obtenerContextoUsuarioSpainWay(idUsuario);
+  } catch (error) {
+    console.log(
+      "[recomendador] contexto de usuario no disponible:",
+      error instanceof Error ? error.message : String(error),
+    );
+    return null;
+  }
+}
+
+async function obtenerContextoMeteoSafe(input: {
+  lat: number;
+  lon: number;
+  dates?: string[];
+  days?: number;
+}): Promise<Record<string, unknown> | null> {
+  try {
+    const ctx = await obtenerContextoMeteorologicoSpainWay(input);
+    return ctx as unknown as Record<string, unknown> | null;
+  } catch (error) {
+    console.log(
+      "[recomendador] contexto meteorológico no disponible:",
+      error instanceof Error ? error.message : String(error),
+    );
+    return null;
+  }
+}
+
+// Contexto de usuario aplanado a las claves que el motor de IA sabe leer.
+function construirUserContextParaIa(
+  contexto: ContextoUsuarioSpainWay | null,
+  contextoTexto: string,
+): Record<string, unknown> | undefined {
+  if (!contexto) return undefined;
+  return {
+    ...contexto,
+    intereses: contexto.preferencias?.intereses ?? null,
+    estilo_viaje: contexto.preferencias?.estilo_viaje ?? null,
+    categorias_preferidas: contexto.favoritos
+      .map((fav) => fav.categoria)
+      .filter((value): value is string => Boolean(value)),
+    municipios_favoritos: contexto.favoritos
+      .map((fav) => fav.municipio)
+      .filter((value): value is string => Boolean(value)),
+    context_text: contextoTexto,
+  };
+}
 
 type LiveEventProvider = "ticketmaster" | "predicthq";
 
@@ -280,9 +344,8 @@ function normalizarDia(day: IaDayPlan, index: number): DiaNormalizado {
     total_minutes: day.total_minutes ?? day.minutos ?? null,
     pois,
     local_tips: tips,
-    schedule: Array.isArray(day.schedule) ? day.schedule : undefined,
-    route_metrics: day.route_metrics,
-    quality_metrics: day.quality_metrics,
+    schedule: Array.isArray(day.schedule) ? day.schedule : [],
+    route_metrics: day.route_metrics ?? null,
   };
 }
 
@@ -668,13 +731,9 @@ async function completarDiasConBbdd(
             : [
                 "No se encontraron suficientes POIs compatibles para completar este día.",
               ],
-      // Trazabilidad del motor IA (Fase 7/13): se conserva tal cual venía del
-      // día original; si este día se completó/regeneró con POIs de BBDD, el
-      // horario/route_metrics originales pueden no reflejar los POIs nuevos,
-      // por eso no se inventan aquí.
-      schedule: original?.schedule,
-      route_metrics: original?.route_metrics,
-      quality_metrics: original?.quality_metrics,
+      // Conserva la planificación horaria y las métricas de ruta emitidas por la IA.
+      schedule: Array.isArray(original?.schedule) ? original?.schedule : [],
+      route_metrics: original?.route_metrics ?? null,
     });
   }
 
@@ -1070,59 +1129,32 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
       nombresExcluidosPorTexto,
     );
 
-    // Contexto real de usuario (Fase 8): nunca debe romper la generación si falla.
-    let userContext: UserContextPayload | null = null;
-    try {
-      const contextoUsuario = await obtenerContextoUsuarioSpainWay(idUsuario);
-      const contextoTexto = contextoToTexto(contextoUsuario);
-      const tieneContexto =
-        Boolean(contextoUsuario.preferencias) ||
-        contextoUsuario.favoritos.length > 0 ||
-        contextoUsuario.mensajes_recientes.length > 0;
-      if (tieneContexto) {
-        userContext = {
-          preferences: contextoUsuario.preferencias,
-          favorites: contextoUsuario.favoritos,
-          recent_messages: contextoUsuario.mensajes_recientes,
-          context_text: contextoTexto,
-          visited_global_ids: visitedGlobalIdsFinales,
-          negative_preferences: negativePreferences,
-        };
-      }
-    } catch (error) {
-      app.log.warn({ error }, "[recomendador] No se pudo construir el contexto de usuario, se continúa sin él");
-      userContext = null;
+    // Normalización de ritmo y transporte a valores canónicos del motor.
+    const paceNormalizado = normalizarRitmo(body.pace);
+    const transporteNormalizado = normalizarTransporte(body.transport);
+
+    // Validación ligera de coordenadas base (rango geográfico plausible).
+    const baseLat = Number(body.base_lat);
+    const baseLon = Number(body.base_lon);
+    if (!Number.isFinite(baseLat) || baseLat < -90 || baseLat > 90) {
+      return reply.code(400).send({ message: "base_lat fuera de rango" });
+    }
+    if (!Number.isFinite(baseLon) || baseLon < -180 || baseLon > 180) {
+      return reply.code(400).send({ message: "base_lon fuera de rango" });
     }
 
-    // Contexto meteorológico (Fase 9): nunca debe bloquear la generación si falla.
-    let weatherContext: WeatherContextPayload = { available: false };
-    try {
-      const baseLatNum = Number(body.base_lat);
-      const baseLonNum = Number(body.base_lon);
-      if (Number.isFinite(baseLatNum) && Number.isFinite(baseLonNum)) {
-        const meteo = await obtenerContextoMeteorologicoSpainWay({
-          lat: baseLatNum,
-          lon: baseLonNum,
-          dates: Array.isArray(body.dates) ? body.dates : [],
-          days,
-        });
-        if (meteo) {
-          const recommendedAdjustments: string[] = [];
-          if (meteo.rainy_days.length > 0) recommendedAdjustments.push("prioritize_indoor_afternoon");
-          if (meteo.hot_days.length > 0) recommendedAdjustments.push("avoid_outdoor_midday");
-          weatherContext = {
-            available: true,
-            summary: meteo.summary,
-            rainy_slots: meteo.rainy_days.length > 0 ? ["afternoon"] : [],
-            hot_slots: meteo.hot_days.length > 0 ? ["midday"] : [],
-            recommended_adjustments: recommendedAdjustments,
-          };
-        }
-      }
-    } catch (error) {
-      app.log.warn({ error }, "[recomendador] No se pudo obtener meteorología, se continúa sin ella");
-      weatherContext = { available: false };
-    }
+    // Contexto enriquecido (usuario + meteorología). Nunca bloquea la generación.
+    const [contextoUsuario, contextoMeteo] = await Promise.all([
+      obtenerContextoUsuarioSafe(idUsuario),
+      obtenerContextoMeteoSafe({
+        lat: baseLat,
+        lon: baseLon,
+        dates: Array.isArray(body.dates) ? body.dates : undefined,
+        days,
+      }),
+    ]);
+    const contextoTexto = contextoUsuario ? contextoToTexto(contextoUsuario) : "";
+    const userContextParaIa = construirUserContextParaIa(contextoUsuario, contextoTexto);
 
     const payload: PayloadRecomendador = {
       id_usuario: idUsuario,
@@ -1130,37 +1162,56 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
       days,
       budget: body.budget || "medio",
       dates: Array.isArray(body.dates) ? body.dates : [],
-      pace: body.pace || "equilibrado",
+      pace: paceNormalizado,
       trip_type: body.trip_type || "mixto",
       companions: body.companions || "",
-      transport: body.transport || "mixto",
+      transport: transporteNormalizado,
       must_see: body.must_see || "",
       extras: body.extras || "",
       notes: body.notes || "",
       base_location_name: body.base_location_name || body.base_address || "",
       base_address: body.base_address || body.base_location_name || "",
       base_place_id: body.base_place_id,
-      base_lat: Number(body.base_lat),
-      base_lon: Number(body.base_lon),
+      base_lat: baseLat,
+      base_lon: baseLon,
       allow_excursions: Boolean(body.allow_excursions),
       max_distance_km: body.max_distance_km ?? null,
       visited_global_ids: visitedGlobalIdsFinales,
-      visited_poi_names: Array.isArray(body.visited_poi_names)
-        ? body.visited_poi_names
-        : [],
-      negative_preferences: negativePreferences,
+      visited_poi_names: sanitizarLista(body.visited_poi_names, 200),
+      negative_preferences: sanitizarLista(negativePreferences),
       include_live_events: body.include_live_events === true,
-      user_context: userContext,
-      weather_context: weatherContext,
+      // Señales de interés reenviadas a la IA (antes se perdían en el backend).
+      wants_beach: body.wants_beach,
+      wants_nature: body.wants_nature,
+      wants_culture: body.wants_culture,
+      wants_food: body.wants_food,
+      wants_events: body.wants_events,
+      interest_tags: sanitizarLista(body.interest_tags),
+      travel_style_tags: sanitizarLista(
+        Array.isArray(body.travel_style_tags) ? body.travel_style_tags : body.interest_tags,
+      ),
+      climate_preference: body.climate_preference,
+      // Reproducibilidad y contexto enriquecido.
+      request_seed:
+        (typeof body.request_seed === "string" && body.request_seed.trim()) ||
+        construirRequestSeed(destination, days, paceNormalizado, transporteNormalizado),
+      context_text: contextoTexto || undefined,
+      user_context: userContextParaIa,
+      weather_context: contextoMeteo ?? undefined,
     };
 
     const iaResult = await callIaItinerary<IaResponse>(payload);
     if (!iaResult.ok) {
+      // Contrato de error explícito para el frontend: puede distinguir
+      // IA_WARMING / IA_TIMEOUT / IA_UNAVAILABLE / IA_BUSY y reaccionar sin
+      // perder los datos del formulario ni mostrar un "fetch failed".
       const statusCode = iaResult.status === "busy" ? 409 : 503;
       return reply.code(statusCode).send({
         ok: false,
+        code: iaResult.code,
         status: iaResult.status,
         message: iaResult.message,
+        retryable: iaResult.retryable,
       });
     }
     const ia = iaResult.data;
@@ -1233,6 +1284,7 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
           base_longitud: payload.base_lon,
           permite_excursiones: Boolean(payload.allow_excursions),
           radio_max_km: payload.max_distance_km ?? null,
+          // JSON dinámico validado en runtime; se castea al tipo de entrada de Prisma.
           ia_json: iaPersistente as unknown as Prisma.InputJsonValue,
           ia_resumen: ia.summary ?? ia.resumen ?? null,
           preferencias_json: payload as unknown as Prisma.InputJsonValue,

@@ -1,6 +1,12 @@
 import { FastifyInstance } from "fastify";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { callIaItinerary } from "../../servicios/ia.service";
+import {
+  obtenerContextoUsuarioSpainWay,
+  contextoToTexto,
+} from "./recomendador-contexto.service";
+import { obtenerContextoMeteorologicoSpainWay } from "../meteorologia/meteorologia.service";
 
 type PayloadRecomendador = {
   id_usuario?: number;
@@ -26,7 +32,32 @@ type PayloadRecomendador = {
   visited_poi_names?: string[];
   negative_preferences?: string[];
   include_live_events?: boolean;
+  // Contexto real enviado al motor IA (Fase 8/9): opcional para no romper
+  // compatibilidad con llamadas antiguas o pruebas que no lo incluyan.
+  user_context?: UserContextPayload | null;
+  weather_context?: WeatherContextPayload;
 };
+
+// --- Contexto de usuario real (Fase 8) --------------------------------------
+type UserContextPayload = {
+  preferences: unknown;
+  favorites: unknown;
+  recent_messages: unknown;
+  context_text: string;
+  visited_global_ids: string[];
+  negative_preferences: string[];
+};
+
+// --- Contexto meteorológico (Fase 9) ----------------------------------------
+type WeatherContextPayload =
+  | {
+      available: true;
+      summary: string;
+      rainy_slots: string[];
+      hot_slots: string[];
+      recommended_adjustments: string[];
+    }
+  | { available: false };
 
 type IaPoi = {
   global_id?: string;
@@ -38,6 +69,12 @@ type IaPoi = {
   image_url?: string;
   imagen_url?: string;
   google_search_url?: string;
+  // Explicabilidad del motor propio (opcional, no rompe POIs antiguos sin estos campos).
+  score_breakdown?: Record<string, number>;
+  selection_reasons?: string[];
+  confidence?: number;
+  semantic_affinity?: number;
+  is_curated_highlight?: boolean;
 };
 
 type IaDayPlan = {
@@ -51,6 +88,10 @@ type IaDayPlan = {
   items?: IaPoi[];
   local_tips?: string[];
   consejos?: string[];
+  // Planificación por horarios (Fase 7 IA): opcional.
+  schedule?: unknown[];
+  route_metrics?: unknown;
+  quality_metrics?: unknown;
 };
 
 type IaResponse = {
@@ -62,6 +103,9 @@ type IaResponse = {
   items?: IaPoi[];
   day_plans?: IaDayPlan[];
   dias?: IaDayPlan[];
+  // Trazabilidad explicable del motor propio (Fase 1 IA): opcional.
+  engine_metadata?: unknown;
+  decision_trace?: unknown;
   [key: string]: unknown;
 };
 
@@ -71,6 +115,10 @@ type DiaNormalizado = {
   total_minutes: number | null;
   pois: IaPoi[];
   local_tips: string[];
+  // Trazabilidad por día (Fase 7/13): opcional, se propaga tal cual desde la IA.
+  schedule?: unknown[];
+  route_metrics?: unknown;
+  quality_metrics?: unknown;
 };
 
 type LiveEventProvider = "ticketmaster" | "predicthq";
@@ -232,6 +280,9 @@ function normalizarDia(day: IaDayPlan, index: number): DiaNormalizado {
     total_minutes: day.total_minutes ?? day.minutos ?? null,
     pois,
     local_tips: tips,
+    schedule: Array.isArray(day.schedule) ? day.schedule : undefined,
+    route_metrics: day.route_metrics,
+    quality_metrics: day.quality_metrics,
   };
 }
 
@@ -617,6 +668,13 @@ async function completarDiasConBbdd(
             : [
                 "No se encontraron suficientes POIs compatibles para completar este día.",
               ],
+      // Trazabilidad del motor IA (Fase 7/13): se conserva tal cual venía del
+      // día original; si este día se completó/regeneró con POIs de BBDD, el
+      // horario/route_metrics originales pueden no reflejar los POIs nuevos,
+      // por eso no se inventan aquí.
+      schedule: original?.schedule,
+      route_metrics: original?.route_metrics,
+      quality_metrics: original?.quality_metrics,
     });
   }
 
@@ -1012,6 +1070,60 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
       nombresExcluidosPorTexto,
     );
 
+    // Contexto real de usuario (Fase 8): nunca debe romper la generación si falla.
+    let userContext: UserContextPayload | null = null;
+    try {
+      const contextoUsuario = await obtenerContextoUsuarioSpainWay(idUsuario);
+      const contextoTexto = contextoToTexto(contextoUsuario);
+      const tieneContexto =
+        Boolean(contextoUsuario.preferencias) ||
+        contextoUsuario.favoritos.length > 0 ||
+        contextoUsuario.mensajes_recientes.length > 0;
+      if (tieneContexto) {
+        userContext = {
+          preferences: contextoUsuario.preferencias,
+          favorites: contextoUsuario.favoritos,
+          recent_messages: contextoUsuario.mensajes_recientes,
+          context_text: contextoTexto,
+          visited_global_ids: visitedGlobalIdsFinales,
+          negative_preferences: negativePreferences,
+        };
+      }
+    } catch (error) {
+      app.log.warn({ error }, "[recomendador] No se pudo construir el contexto de usuario, se continúa sin él");
+      userContext = null;
+    }
+
+    // Contexto meteorológico (Fase 9): nunca debe bloquear la generación si falla.
+    let weatherContext: WeatherContextPayload = { available: false };
+    try {
+      const baseLatNum = Number(body.base_lat);
+      const baseLonNum = Number(body.base_lon);
+      if (Number.isFinite(baseLatNum) && Number.isFinite(baseLonNum)) {
+        const meteo = await obtenerContextoMeteorologicoSpainWay({
+          lat: baseLatNum,
+          lon: baseLonNum,
+          dates: Array.isArray(body.dates) ? body.dates : [],
+          days,
+        });
+        if (meteo) {
+          const recommendedAdjustments: string[] = [];
+          if (meteo.rainy_days.length > 0) recommendedAdjustments.push("prioritize_indoor_afternoon");
+          if (meteo.hot_days.length > 0) recommendedAdjustments.push("avoid_outdoor_midday");
+          weatherContext = {
+            available: true,
+            summary: meteo.summary,
+            rainy_slots: meteo.rainy_days.length > 0 ? ["afternoon"] : [],
+            hot_slots: meteo.hot_days.length > 0 ? ["midday"] : [],
+            recommended_adjustments: recommendedAdjustments,
+          };
+        }
+      }
+    } catch (error) {
+      app.log.warn({ error }, "[recomendador] No se pudo obtener meteorología, se continúa sin ella");
+      weatherContext = { available: false };
+    }
+
     const payload: PayloadRecomendador = {
       id_usuario: idUsuario,
       destination,
@@ -1038,6 +1150,8 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
         : [],
       negative_preferences: negativePreferences,
       include_live_events: body.include_live_events === true,
+      user_context: userContext,
+      weather_context: weatherContext,
     };
 
     const iaResult = await callIaItinerary<IaResponse>(payload);
@@ -1119,9 +1233,9 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
           base_longitud: payload.base_lon,
           permite_excursiones: Boolean(payload.allow_excursions),
           radio_max_km: payload.max_distance_km ?? null,
-          ia_json: iaPersistente,
+          ia_json: iaPersistente as unknown as Prisma.InputJsonValue,
           ia_resumen: ia.summary ?? ia.resumen ?? null,
-          preferencias_json: payload,
+          preferencias_json: payload as unknown as Prisma.InputJsonValue,
         },
       });
 

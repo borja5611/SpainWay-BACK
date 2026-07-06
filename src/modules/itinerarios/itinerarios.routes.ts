@@ -171,6 +171,77 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
     return itinerario;
   });
 
+  // ─── Auditoría explicable del motor IA (Fase 14) ────────────────────────────
+  // Devuelve un resumen limpio (sin JSON bruto ni datos sensibles del usuario)
+  // de cómo el motor propio generó este itinerario: engine_metadata,
+  // candidate_pipeline, selected_summary, scoring_weights y quality_metrics,
+  // tal y como quedaron persistidos en `ia_json` en el momento de generar (o
+  // regenerar) el itinerario. Solo el dueño del itinerario puede consultarla.
+  app.get("/:id_itinerario/auditoria", async (request, reply) => {
+    let usuarioId: number;
+
+    try {
+      usuarioId = await getUsuarioIdAutenticado(request);
+    } catch {
+      return reply.code(401).send({ message: "No autorizado" });
+    }
+
+    const { id_itinerario } = request.params as { id_itinerario: string };
+    const itinerarioId = toInt(id_itinerario);
+
+    if (itinerarioId === null) {
+      return reply.code(400).send({ message: "id_itinerario inválido" });
+    }
+
+    const itinerario = await prisma.itinerario.findFirst({
+      where: { id_itinerario: itinerarioId, id_usuario: usuarioId },
+      select: { id_itinerario: true, ia_json: true },
+    });
+
+    if (!itinerario) {
+      return reply.code(404).send({ message: "Itinerario no encontrado" });
+    }
+
+    const iaJson = (itinerario.ia_json ?? null) as Record<string, any> | null;
+    const engineMetadata = iaJson?.engine_metadata ?? null;
+    const decisionTrace = iaJson?.decision_trace ?? null;
+
+    if (!engineMetadata && !decisionTrace) {
+      return {
+        ok: true,
+        data: {
+          available: false,
+          summary_message: "Este itinerario todavía no tiene auditoría técnica disponible.",
+        },
+      };
+    }
+
+    // NOTA: `summary_message` es siempre un texto fijo definido aquí, nunca se
+    // lee de `decisionTrace` (que es trazabilidad técnica para auditoría, no
+    // copy). Esto también evita que un texto antiguo persistido en `ia_json`
+    // antes de esta corrección pudiera reaparecer en una respuesta runtime.
+    return {
+      ok: true,
+      data: {
+        available: true,
+        engine: {
+          name: engineMetadata?.engine_name ?? "SpainWay Explainable Travel Intelligence Engine",
+          version: engineMetadata?.engine_version ?? "6.0.0",
+          generation_mode: engineMetadata?.generation_mode ?? "deterministic_hybrid_recommender",
+          llm_role: engineMetadata?.llm_role ?? "natural_language_parser_only",
+          llm_used_for_generation: engineMetadata?.llm_used_for_generation ?? false,
+        },
+        candidate_pipeline: decisionTrace?.candidate_pipeline ?? {},
+        selected_summary: decisionTrace?.selected_summary ?? {},
+        scoring_weights: decisionTrace?.scoring_weights ?? {},
+        quality_metrics: iaJson?.quality_metrics ?? {},
+        rejected_examples: decisionTrace?.rejected_examples ?? [],
+        audit_history_count: Array.isArray(iaJson?.audit_history) ? iaJson.audit_history.length : 0,
+        summary_message: "Resumen de los criterios técnicos utilizados para construir esta recomendación.",
+      },
+    };
+  });
+
   // ─── Helpers locales para el endpoint de mapa ───────────────────────────────
   function toIsoOrNull(value: Date | string | null | undefined): string | null {
     if (value === null || value === undefined) return null;

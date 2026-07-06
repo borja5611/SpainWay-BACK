@@ -1,4 +1,36 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+
+// Nº máximo de instantáneas de trazabilidad conservadas por itinerario
+// (Fase 13): evita que `ia_json.audit_history` crezca sin límite tras muchas
+// ediciones manuales.
+const MAX_AUDIT_HISTORY_ENTRIES = 10;
+
+/**
+ * Antes de sobrescribir `ia_json` con los días ya editados manualmente,
+ * conserva una instantánea de la trazabilidad explicable (`engine_metadata`
+ * + `decision_trace` + `quality_metrics`) que tenía el itinerario justo antes
+ * de esta edición, bajo `audit_history`. Así no se pierde la evidencia de
+ * cómo generó el motor la versión original, aunque el usuario edite el
+ * itinerario después.
+ */
+function appendAuditHistorySnapshot(previousIaJson: any, nextIaJson: any): any {
+  if (!previousIaJson || typeof previousIaJson !== "object") return nextIaJson;
+  const hadTrace = previousIaJson.engine_metadata || previousIaJson.decision_trace;
+  if (!hadTrace) return nextIaJson;
+
+  const snapshot = {
+    snapshotted_at: new Date().toISOString(),
+    engine_metadata: previousIaJson.engine_metadata ?? null,
+    decision_trace: previousIaJson.decision_trace ?? null,
+    quality_metrics: previousIaJson.quality_metrics ?? null,
+  };
+
+  const priorHistory = Array.isArray(previousIaJson.audit_history) ? previousIaJson.audit_history : [];
+  const history = [...priorHistory, snapshot].slice(-MAX_AUDIT_HISTORY_ENTRIES);
+
+  return { ...nextIaJson, audit_history: history };
+}
 
 export type ManualItineraryAction =
   | { action: "remove"; dayNumber: number; poiId?: number; poiName?: string }
@@ -258,12 +290,15 @@ async function syncIaJsonFromDb(idItinerario: number) {
     };
   });
 
-  const ia_json = setIaDays(itinerario.ia_json, nextDays);
+  const ia_json = appendAuditHistorySnapshot(
+    itinerario.ia_json,
+    setIaDays(itinerario.ia_json, nextDays),
+  );
 
   await prisma.itinerario.update({
     where: { id_itinerario: idItinerario },
     data: {
-      ia_json,
+      ia_json: ia_json as unknown as Prisma.InputJsonValue,
       actualizado: new Date(),
     },
   });

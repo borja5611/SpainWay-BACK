@@ -14,6 +14,10 @@ import {
   construirRequestSeed,
   sanitizarLista,
 } from "./recomendador-normalizacion";
+import {
+  requiereAutenticacion,
+  usuarioAutenticadoId,
+} from "../../hooks/auth.hook";
 
 type PayloadRecomendador = {
   id_usuario?: number;
@@ -1090,13 +1094,19 @@ function crearJsonPersistente(
 }
 
 export default async function recomendadorRoutes(app: FastifyInstance) {
-  app.post("/generar", async (request, reply) => {
+  app.post(
+    "/generar",
+    {
+      preHandler: [requiereAutenticacion],
+      // La generación invoca al servicio de IA (con coste potencial si el LLM
+      // externo está activo): se limita el ritmo por usuario/IP para evitar abuso.
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
     const body = request.body as PayloadRecomendador;
-    const idUsuario = toInt(body.id_usuario);
-
-    if (idUsuario === null) {
-      return reply.code(400).send({ message: "id_usuario inválido" });
-    }
+    // El itinerario se atribuye SIEMPRE al usuario del token, nunca al id_usuario
+    // que venga en el cuerpo: así nadie puede crear itinerarios en nombre de otro.
+    const idUsuario = usuarioAutenticadoId(request);
 
     const destination = body.destination?.trim();
     if (!destination) {
@@ -1491,5 +1501,6 @@ export default async function recomendadorRoutes(app: FastifyInstance) {
       eventos_live_total: liveEvents.length,
       eventos_live_por_dia: eventosPorDia,
     });
-  });
+    }
+  );
 }

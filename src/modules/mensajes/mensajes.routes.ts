@@ -1,5 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
+import { requiereAutenticacion, usuarioAutenticadoId } from "../../hooks/auth.hook";
 
 function toInt(value: unknown): number | null {
   const n = Number(value);
@@ -15,12 +16,26 @@ function validarRol(rol: string | undefined | null): string {
 }
 
 export default async function mensajesRoutes(app: FastifyInstance) {
-  app.get("/:id_conversacion", async (request, reply) => {
+  app.get("/:id_conversacion", { preHandler: [requiereAutenticacion] }, async (request, reply) => {
     const { id_conversacion } = request.params as { id_conversacion: string };
     const idConversacion = toInt(id_conversacion);
 
     if (idConversacion === null) {
       return reply.code(400).send({ message: "id_conversacion inválido" });
+    }
+
+    // Propiedad del recurso: los mensajes solo se sirven al dueño de la conversación.
+    const propietaria = await prisma.conversacion.findUnique({
+      where: { id_conversacion: idConversacion },
+      select: { id_usuario: true },
+    });
+
+    if (!propietaria) {
+      return reply.code(404).send({ message: "Conversación no encontrada" });
+    }
+
+    if (propietaria.id_usuario !== usuarioAutenticadoId(request)) {
+      return reply.code(403).send({ message: "No puedes consultar mensajes de otra conversación" });
     }
 
     const mensajes = await prisma.mensaje.findMany({
@@ -31,7 +46,7 @@ export default async function mensajesRoutes(app: FastifyInstance) {
     return mensajes;
   });
 
-  app.post("/", async (request, reply) => {
+  app.post("/", { preHandler: [requiereAutenticacion] }, async (request, reply) => {
     const body = request.body as {
       id_conversacion?: number;
       rol?: string;
@@ -56,6 +71,10 @@ export default async function mensajesRoutes(app: FastifyInstance) {
 
     if (!conversacion) {
       return reply.code(404).send({ message: "Conversación no encontrada" });
+    }
+
+    if (conversacion.id_usuario !== usuarioAutenticadoId(request)) {
+      return reply.code(403).send({ message: "No puedes escribir en una conversación de otro usuario" });
     }
 
     const mensaje = await prisma.mensaje.create({

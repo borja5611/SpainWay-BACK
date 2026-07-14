@@ -1,13 +1,22 @@
 import { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
+import {
+  requiereAutenticacion,
+  validarPropiedadRecurso,
+  toInt,
+} from "../../hooks/auth.hook";
 
-function toInt(value: unknown): number | null {
-  const n = Number(value);
-  return Number.isInteger(n) ? n : null;
-}
-
+// NOTA (deuda técnica, ahora securizada): este módulo se monta en
+// `/api/interacciones` (ver app.ts) pero su contenido es un duplicado heredado
+// de las rutas de itinerarios y el frontend no lo consume. Hasta esta revisión
+// exponía los itinerarios de CUALQUIER usuario sin autenticación (IDOR); ahora
+// exige token válido y propiedad del recurso. Recomendación: eliminarlo o
+// reimplementarlo sobre el modelo Item_interaccion.
 export default async function itinerariosRoutes(app: FastifyInstance) {
-  app.get("/:id_usuario", async (request, reply) => {
+  app.get(
+    "/:id_usuario",
+    { preHandler: [requiereAutenticacion, validarPropiedadRecurso("id_usuario")] },
+    async (request, reply) => {
     const { id_usuario } = request.params as { id_usuario: string };
     const usuarioId = toInt(id_usuario);
 
@@ -56,9 +65,13 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
     });
 
     return itinerarios;
-  });
+    }
+  );
 
-  app.get("/resumen/:id_usuario", async (request, reply) => {
+  app.get(
+    "/resumen/:id_usuario",
+    { preHandler: [requiereAutenticacion, validarPropiedadRecurso("id_usuario")] },
+    async (request, reply) => {
     const { id_usuario } = request.params as { id_usuario: string };
     const usuarioId = toInt(id_usuario);
 
@@ -85,5 +98,6 @@ export default async function itinerariosRoutes(app: FastifyInstance) {
     });
 
     return itinerarios;
-  });
+    }
+  );
 }

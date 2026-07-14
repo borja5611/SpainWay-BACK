@@ -1,5 +1,7 @@
-import Fastify from "fastify";
+import Fastify, { FastifyError } from "fastify";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUI from "@fastify/swagger-ui";
 import jwt from "@fastify/jwt";
@@ -60,6 +62,21 @@ export async function buildApp() {
     secret: jwtSecret || "spainway-secret-dev-local",
   });
 
+  // Cabeceras de seguridad HTTP (nosniff, frameguard, HSTS, referrer-policy…).
+  // Se desactiva la CSP porque esta instancia sirve Swagger UI en /docs y la CSP
+  // por defecto de helmet bloquearía sus recursos.
+  await app.register(helmet, {
+    contentSecurityPolicy: false,
+  });
+
+  // Límite de peticiones global como red de seguridad frente a abuso. Las rutas
+  // sensibles (login, registro, recuperación de contraseña y generación con IA)
+  // añaden límites más estrictos vía `config.rateLimit` en su propia definición.
+  await app.register(rateLimit, {
+    max: 300,
+    timeWindow: "1 minute",
+  });
+
   await app.register(swagger, {
     openapi: {
       info: {
@@ -99,6 +116,25 @@ export async function buildApp() {
   await app.register(chatAccionesRoutes, { prefix: "/api/chat-acciones" });
   await app.register(meteorologiaRoutes, { prefix: "/api/meteorologia" });
   await app.register(lugaresLocalesRoutes, { prefix: "/api/lugares-locales" });
+
+  // Manejador de errores centralizado: registra el error completo en el servidor
+  // pero nunca expone la traza ni el mensaje interno al cliente en producción
+  // (evita fuga de información sensible en errores 5xx).
+  app.setErrorHandler((error: FastifyError, request, reply) => {
+    request.log.error(error);
+    const statusCode = error.statusCode ?? 500;
+    const esProduccion = env.NODE_ENV === "production";
+
+    if (statusCode >= 500) {
+      return reply.code(statusCode).send({
+        message: esProduccion ? "Error interno del servidor" : error.message,
+      });
+    }
+
+    // Errores 4xx (validación de esquema, límite de peticiones…): el mensaje es
+    // controlado y seguro de mostrar al cliente.
+    return reply.code(statusCode).send({ message: error.message });
+  });
 
   return app;
 }

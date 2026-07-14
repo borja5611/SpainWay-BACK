@@ -11,6 +11,10 @@ const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 
 const RESET_TOKEN_TTL_SECONDS = 15 * 60;
 
+// Vigencia del token de acceso. Corta para acotar la ventana de uso si se filtra
+// un token; el frontend puede renovarlo con /api/auth/refresh mientras sea válido.
+const ACCESS_TOKEN_TTL = "1h";
+
 function generarCodigoReset(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -145,7 +149,7 @@ export default async function authRoutes(app: FastifyInstance) {
     return reply.send(resultado);
   });
 
-  app.post("/register", async (request, reply) => {
+  app.post("/register", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = request.body as {
       nombre: string;
       nombre_usuario: string;
@@ -204,12 +208,15 @@ export default async function authRoutes(app: FastifyInstance) {
       },
     });
 
-    const token = app.jwt.sign({
-      id_usuario: usuario.id_usuario,
-      email: usuario.email,
-      rol: usuario.rol,
-      nombre_usuario: usuario.nombre_usuario,
-    });
+    const token = app.jwt.sign(
+      {
+        id_usuario: usuario.id_usuario,
+        email: usuario.email,
+        rol: usuario.rol,
+        nombre_usuario: usuario.nombre_usuario,
+      },
+      { expiresIn: ACCESS_TOKEN_TTL }
+    );
 
     return reply.code(201).send({
       token,
@@ -224,7 +231,7 @@ export default async function authRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/login", async (request, reply) => {
+  app.post("/login", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = request.body as {
       emailOrUsername: string;
       password: string;
@@ -255,12 +262,15 @@ export default async function authRoutes(app: FastifyInstance) {
       return reply.code(401).send({ message: "Credenciales inválidas" });
     }
 
-    const token = app.jwt.sign({
-      id_usuario: usuario.id_usuario,
-      email: usuario.email,
-      rol: usuario.rol,
-      nombre_usuario: usuario.nombre_usuario,
-    });
+    const token = app.jwt.sign(
+      {
+        id_usuario: usuario.id_usuario,
+        email: usuario.email,
+        rol: usuario.rol,
+        nombre_usuario: usuario.nombre_usuario,
+      },
+      { expiresIn: ACCESS_TOKEN_TTL }
+    );
 
     return {
       token,
@@ -276,7 +286,7 @@ export default async function authRoutes(app: FastifyInstance) {
   });
 
 
-  app.post("/password/forgot", async (request, reply) => {
+  app.post("/password/forgot", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = request.body as { email?: string };
     const email = normalizarEmail(body.email);
 
@@ -339,7 +349,7 @@ export default async function authRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/password/verify", async (request, reply) => {
+  app.post("/password/verify", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = request.body as { email?: string; code?: string };
     const email = normalizarEmail(body.email);
     const code = String(body.code ?? "").trim();
@@ -395,7 +405,7 @@ export default async function authRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/password/reset", async (request, reply) => {
+  app.post("/password/reset", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = request.body as { resetToken?: string; password?: string };
     const resetToken = String(body.resetToken ?? "").trim();
     const password = String(body.password ?? "");
@@ -520,12 +530,15 @@ export default async function authRoutes(app: FastifyInstance) {
         nombre_usuario: string | null;
       };
 
-      const nuevoToken = app.jwt.sign({
-        id_usuario: payload.id_usuario,
-        email: payload.email,
-        rol: payload.rol,
-        nombre_usuario: payload.nombre_usuario,
-      });
+      const nuevoToken = app.jwt.sign(
+        {
+          id_usuario: payload.id_usuario,
+          email: payload.email,
+          rol: payload.rol,
+          nombre_usuario: payload.nombre_usuario,
+        },
+        { expiresIn: ACCESS_TOKEN_TTL }
+      );
 
       return { token: nuevoToken };
     } catch {
@@ -620,12 +633,15 @@ export default async function authRoutes(app: FastifyInstance) {
         });
       }
 
-      const token = app.jwt.sign({
-        id_usuario: usuario.id_usuario,
-        email: usuario.email,
-        rol: usuario.rol,
-        nombre_usuario: usuario.nombre_usuario,
-      });
+      const token = app.jwt.sign(
+        {
+          id_usuario: usuario.id_usuario,
+          email: usuario.email,
+          rol: usuario.rol,
+          nombre_usuario: usuario.nombre_usuario,
+        },
+        { expiresIn: ACCESS_TOKEN_TTL }
+      );
 
       const redirect = new URL(`${frontendUrl}/login`);
       redirect.searchParams.set("token", token);

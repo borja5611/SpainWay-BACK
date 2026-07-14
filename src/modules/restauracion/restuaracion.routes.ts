@@ -1,5 +1,9 @@
 import { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
+import {
+  requiereAutenticacion,
+  usuarioAutenticadoId,
+} from "../../hooks/auth.hook";
 
 type Momento = "desayuno" | "comida" | "cena" | "cafe";
 
@@ -645,7 +649,7 @@ async function buscarGeoapify(params: {
 }
 
 export default async function restauracionRoutes(app: FastifyInstance) {
-  app.get("/buscar", async (request, reply) => {
+  app.get("/buscar", { preHandler: [requiereAutenticacion] }, async (request, reply) => {
     const query = request.query as {
       lat?: string;
       lng?: string;
@@ -791,7 +795,7 @@ export default async function restauracionRoutes(app: FastifyInstance) {
     return enriquecidos.slice(0, limit);
   });
 
-  app.get("/detalle/:id", async (request, reply) => {
+  app.get("/detalle/:id", { preHandler: [requiereAutenticacion] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const lugarId = Number(id);
 
@@ -816,7 +820,7 @@ export default async function restauracionRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/seleccionar", async (request, reply) => {
+  app.post("/seleccionar", { preHandler: [requiereAutenticacion] }, async (request, reply) => {
     const body = request.body as {
       id_itinerario?: number;
       id_dia_itinerario?: number;
@@ -832,6 +836,18 @@ export default async function restauracionRoutes(app: FastifyInstance) {
       !body.id_lugar_restauracion
     ) {
       return reply.code(400).send({ message: "Faltan datos obligatorios" });
+    }
+
+    // Propiedad del recurso: el itinerario al que se asocia la selección debe ser del usuario.
+    const itinerarioDestino = await prisma.itinerario.findUnique({
+      where: { id_itinerario: body.id_itinerario },
+      select: { id_usuario: true },
+    });
+    if (!itinerarioDestino) {
+      return reply.code(404).send({ message: "Itinerario no encontrado" });
+    }
+    if (itinerarioDestino.id_usuario !== usuarioAutenticadoId(request)) {
+      return reply.code(403).send({ message: "No puedes modificar un itinerario de otro usuario" });
     }
 
     const seleccion = await prisma.itinerarioRestauracion.upsert({
@@ -861,12 +877,24 @@ export default async function restauracionRoutes(app: FastifyInstance) {
     return seleccion;
   });
 
-  app.get("/selecciones/:id_itinerario", async (request, reply) => {
+  app.get("/selecciones/:id_itinerario", { preHandler: [requiereAutenticacion] }, async (request, reply) => {
     const { id_itinerario } = request.params as { id_itinerario: string };
     const id = Number(id_itinerario);
 
     if (!Number.isInteger(id)) {
       return reply.code(400).send({ message: "id_itinerario inválido" });
+    }
+
+    // Propiedad del recurso: solo el dueño del itinerario ve sus selecciones.
+    const itinerarioDestino = await prisma.itinerario.findUnique({
+      where: { id_itinerario: id },
+      select: { id_usuario: true },
+    });
+    if (!itinerarioDestino) {
+      return reply.code(404).send({ message: "Itinerario no encontrado" });
+    }
+    if (itinerarioDestino.id_usuario !== usuarioAutenticadoId(request)) {
+      return reply.code(403).send({ message: "No puedes consultar un itinerario de otro usuario" });
     }
 
     return prisma.itinerarioRestauracion.findMany({
@@ -876,12 +904,24 @@ export default async function restauracionRoutes(app: FastifyInstance) {
     });
   });
 
-  app.delete("/selecciones/:id", async (request, reply) => {
+  app.delete("/selecciones/:id", { preHandler: [requiereAutenticacion] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const seleccionId = Number(id);
 
     if (!Number.isInteger(seleccionId)) {
       return reply.code(400).send({ message: "id inválido" });
+    }
+
+    // Propiedad del recurso: la selección debe pertenecer a un itinerario del usuario.
+    const seleccionExistente = await prisma.itinerarioRestauracion.findUnique({
+      where: { id_itinerario_restauracion: seleccionId },
+      select: { itinerario: { select: { id_usuario: true } } },
+    });
+    if (!seleccionExistente) {
+      return reply.code(404).send({ message: "Selección no encontrada" });
+    }
+    if (seleccionExistente.itinerario.id_usuario !== usuarioAutenticadoId(request)) {
+      return reply.code(403).send({ message: "No puedes eliminar selecciones de otro usuario" });
     }
 
     await prisma.itinerarioRestauracion.delete({

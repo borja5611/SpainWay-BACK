@@ -1,8 +1,13 @@
 import { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
+import {
+  requiereAutenticacion,
+  validarPropiedadRecurso,
+  usuarioAutenticadoId,
+} from "../../hooks/auth.hook";
 
 export default async function preferenciasRoutes(app: FastifyInstance) {
-  app.get("/:id_usuario", async (request, reply) => {
+  app.get("/:id_usuario", { preHandler: [requiereAutenticacion, validarPropiedadRecurso("id_usuario")] }, async (request, reply) => {
     const { id_usuario } = request.params as { id_usuario: string };
     const idUsuario = Number(id_usuario);
 
@@ -29,9 +34,11 @@ export default async function preferenciasRoutes(app: FastifyInstance) {
     return preferencias;
   });
 
-  app.post("/", async (request, reply) => {
+  app.post("/", { preHandler: [requiereAutenticacion] }, async (request, reply) => {
+    // El id_usuario efectivo es el del token; el del cuerpo solo se admite si coincide.
+    const idUsuario = usuarioAutenticadoId(request);
     const body = request.body as {
-      id_usuario: number;
+      id_usuario?: number;
       presupuesto?: number | null;
       modo_transporte?: string | null;
       accesibilidad?: string | null;
@@ -40,20 +47,12 @@ export default async function preferenciasRoutes(app: FastifyInstance) {
       intereses?: string | null;
     };
 
-    if (!body.id_usuario || Number.isNaN(Number(body.id_usuario))) {
-      return reply.code(400).send({ message: "id_usuario inválido" });
-    }
-
-    const usuario = await prisma.usuario.findUnique({
-      where: { id_usuario: Number(body.id_usuario) },
-    });
-
-    if (!usuario) {
-      return reply.code(404).send({ message: "Usuario no encontrado" });
+    if (body.id_usuario !== undefined && Number(body.id_usuario) !== idUsuario) {
+      return reply.code(403).send({ message: "No puedes crear preferencias de otro usuario" });
     }
 
     const existente = await prisma.pref_usuario.findUnique({
-      where: { id_usuario: Number(body.id_usuario) },
+      where: { id_usuario: idUsuario },
     });
 
     if (existente) {
@@ -62,7 +61,7 @@ export default async function preferenciasRoutes(app: FastifyInstance) {
 
     const creada = await prisma.pref_usuario.create({
       data: {
-        id_usuario: Number(body.id_usuario),
+        id_usuario: idUsuario,
         presupuesto: body.presupuesto ?? null,
         modo_transporte: body.modo_transporte ?? null,
         accesibilidad: body.accesibilidad ?? null,
@@ -75,7 +74,7 @@ export default async function preferenciasRoutes(app: FastifyInstance) {
     return reply.code(201).send(creada);
   });
 
-  app.patch("/:id_usuario", async (request, reply) => {
+  app.patch("/:id_usuario", { preHandler: [requiereAutenticacion, validarPropiedadRecurso("id_usuario")] }, async (request, reply) => {
     const { id_usuario } = request.params as { id_usuario: string };
     const idUsuario = Number(id_usuario);
 
@@ -91,14 +90,6 @@ export default async function preferenciasRoutes(app: FastifyInstance) {
       estilo_viaje?: string | null;
       intereses?: string | null;
     };
-
-    const usuario = await prisma.usuario.findUnique({
-      where: { id_usuario: idUsuario },
-    });
-
-    if (!usuario) {
-      return reply.code(404).send({ message: "Usuario no encontrado" });
-    }
 
     const existente = await prisma.pref_usuario.findUnique({
       where: { id_usuario: idUsuario },

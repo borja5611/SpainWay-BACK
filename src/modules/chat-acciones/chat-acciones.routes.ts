@@ -15,6 +15,10 @@ import {
   buscarEventosLiveAgregado,
   type LiveEvent,
 } from "../eventos-live/eventos-live.routes";
+import {
+  requiereAutenticacion,
+  usuarioAutenticadoId,
+} from "../../hooks/auth.hook";
 
 function toInt(value: unknown): number | null {
   const n = Number(value);
@@ -819,7 +823,7 @@ async function responderBusquedaEventos(params: {
 }
 
 export default async function chatAccionesRoutes(app: FastifyInstance) {
-  app.post("/:id_conversacion/procesar", async (request, reply) => {
+  app.post("/:id_conversacion/procesar", { preHandler: [requiereAutenticacion] }, async (request, reply) => {
     const { id_conversacion } = request.params as { id_conversacion: string };
     const idConversacion = toInt(id_conversacion);
 
@@ -841,6 +845,14 @@ export default async function chatAccionesRoutes(app: FastifyInstance) {
 
     if (!conversacion) {
       return reply.code(404).send({ message: "Conversación no encontrada" });
+    }
+
+    // Propiedad del recurso: solo el dueño de la conversación puede actuar sobre
+    // ella y sobre el itinerario asociado (evita IDOR y modificación cruzada).
+    if (conversacion.id_usuario !== usuarioAutenticadoId(request)) {
+      return reply
+        .code(403)
+        .send({ message: "No puedes modificar una conversación de otro usuario" });
     }
 
     const user = await crearMensaje(idConversacion, "user", contenido);

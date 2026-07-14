@@ -1,5 +1,10 @@
 import { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
+import {
+  requiereAutenticacion,
+  validarPropiedadRecurso,
+  usuarioAutenticadoId,
+} from "../../hooks/auth.hook";
 
 function toInt(value: unknown): number | null {
   const n = Number(value);
@@ -26,7 +31,7 @@ async function buscarItinerarioRelacionado(idUsuario: number, titulo?: string | 
 }
 
 export default async function conversacionesRoutes(app: FastifyInstance) {
-  app.get("/:id_usuario", async (request, reply) => {
+  app.get("/:id_usuario", { preHandler: [requiereAutenticacion, validarPropiedadRecurso("id_usuario")] }, async (request, reply) => {
     const { id_usuario } = request.params as { id_usuario: string };
     const idUsuario = toInt(id_usuario);
 
@@ -64,7 +69,7 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
     );
   });
 
-  app.get("/detalle/:id_conversacion", async (request, reply) => {
+  app.get("/detalle/:id_conversacion", { preHandler: [requiereAutenticacion] }, async (request, reply) => {
     const { id_conversacion } = request.params as { id_conversacion: string };
     const idConversacion = toInt(id_conversacion);
 
@@ -85,6 +90,10 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ message: "Conversación no encontrada" });
     }
 
+    if (conversacion.id_usuario !== usuarioAutenticadoId(request)) {
+      return reply.code(403).send({ message: "No puedes consultar una conversación de otro usuario" });
+    }
+
     const idItinerarioRelacionado =
       conversacion.id_itinerario ??
       (await buscarItinerarioRelacionado(conversacion.id_usuario, conversacion.titulo));
@@ -95,19 +104,16 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/", async (request, reply) => {
+  app.post("/", { preHandler: [requiereAutenticacion] }, async (request, reply) => {
+    const idUsuario = usuarioAutenticadoId(request);
     const body = request.body as {
-      id_usuario: number;
+      id_usuario?: number;
       titulo?: string;
       id_itinerario?: number | null;
     };
 
-    const usuario = await prisma.usuario.findUnique({
-      where: { id_usuario: body.id_usuario },
-    });
-
-    if (!usuario) {
-      return reply.code(404).send({ message: "Usuario no encontrado" });
+    if (body.id_usuario !== undefined && Number(body.id_usuario) !== idUsuario) {
+      return reply.code(403).send({ message: "No puedes crear conversaciones de otro usuario" });
     }
 
     const idItinerario = body.id_itinerario ? toInt(body.id_itinerario) : null;
@@ -118,7 +124,7 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
 
     const conversacion = await prisma.conversacion.create({
       data: {
-        id_usuario: body.id_usuario,
+        id_usuario: idUsuario,
         id_itinerario: idItinerario ?? undefined,
         titulo: body.titulo ?? "Nueva conversación",
         creado: new Date(),
@@ -131,7 +137,7 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
     });
   });
 
-  app.delete("/:id_conversacion", async (request, reply) => {
+  app.delete("/:id_conversacion", { preHandler: [requiereAutenticacion] }, async (request, reply) => {
     const { id_conversacion } = request.params as { id_conversacion: string };
     const idConversacion = toInt(id_conversacion);
 
@@ -145,6 +151,10 @@ export default async function conversacionesRoutes(app: FastifyInstance) {
 
     if (!existe) {
       return reply.code(404).send({ message: "Conversación no encontrada" });
+    }
+
+    if (existe.id_usuario !== usuarioAutenticadoId(request)) {
+      return reply.code(403).send({ message: "No puedes eliminar una conversación de otro usuario" });
     }
 
     await prisma.conversacion.delete({

@@ -1,33 +1,14 @@
-import { FastifyInstance, FastifyRequest } from "fastify";
+import { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma";
+import {
+  getUsuarioIdAutenticado,
+  validarUsuarioDeRuta,
+} from "../../hooks/auth.hook";
 
-type JwtUsuario = {
-  id_usuario?: number;
-  email?: string;
-  rol?: string;
-  nombre_usuario?: string;
-};
-
+// toInt local: variante estricta (>0) usada para validar id_poi en esta ruta.
 function toInt(value: unknown): number | null {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : null;
-}
-
-async function getUsuarioIdAutenticado(request: FastifyRequest): Promise<number> {
-  await request.jwtVerify();
-  const user = request.user as JwtUsuario;
-  const usuarioId = toInt(user.id_usuario);
-
-  if (usuarioId === null) {
-    throw new Error("Token sin usuario válido");
-  }
-
-  return usuarioId;
-}
-
-function validarUsuarioDeRuta(usuarioRuta: unknown, usuarioToken: number): boolean {
-  const usuarioRutaId = toInt(usuarioRuta);
-  return usuarioRutaId !== null && usuarioRutaId === usuarioToken;
 }
 
 export default async function favoritosRoutes(app: FastifyInstance) {

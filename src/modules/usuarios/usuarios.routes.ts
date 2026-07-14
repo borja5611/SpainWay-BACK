@@ -1,9 +1,13 @@
 import { FastifyInstance } from "fastify";
 import bcrypt from "bcryptjs";
 import { prisma } from "../../lib/prisma";
+import { requiereAutenticacion, validarPropiedadRecurso } from "../../hooks/auth.hook";
 
 export default async function usuariosRoutes(app: FastifyInstance) {
-  app.get("/:id", async (request, reply) => {
+  app.get(
+    "/:id",
+    { preHandler: [requiereAutenticacion, validarPropiedadRecurso("id")] },
+    async (request, reply) => {
     const { id } = request.params as { id: string };
     const idUsuario = Number(id);
 
@@ -30,9 +34,13 @@ export default async function usuariosRoutes(app: FastifyInstance) {
     }
 
     return usuario;
-  });
+    }
+  );
 
-  app.patch("/:id", async (request, reply) => {
+  app.patch(
+    "/:id",
+    { preHandler: [requiereAutenticacion, validarPropiedadRecurso("id")] },
+    async (request, reply) => {
     const { id } = request.params as { id: string };
     const idUsuario = Number(id);
 
@@ -171,9 +179,13 @@ export default async function usuariosRoutes(app: FastifyInstance) {
     });
 
     return actualizado;
-  });
+    }
+  );
 
-  app.delete("/:id", async (request, reply) => {
+  app.delete(
+    "/:id",
+    { preHandler: [requiereAutenticacion, validarPropiedadRecurso("id")] },
+    async (request, reply) => {
     const { id } = request.params as { id: string };
     const idUsuario = Number(id);
 
@@ -194,5 +206,6 @@ export default async function usuariosRoutes(app: FastifyInstance) {
     });
 
     return { ok: true, message: "Usuario eliminado correctamente" };
-  });
+    }
+  );
 }
